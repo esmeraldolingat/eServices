@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tickets Summary Report for {{ selected_year }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; }
+        .container { max-width: 1600px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; border-bottom: 2px solid #eee; padding-bottom: 0.5em; }
+        a { color: #007bff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        table { width: 100%; border-collapse: collapse; margin-top: 2em; font-size: 0.9em; }
+        th, td { padding: 8px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #e9ecef; }
+        td.total, th.total { font-weight: bold; background-color: #f8f9fa; }
+        .summary-row, .grand-total-row { background-color: #e9ecef; font-weight: bold; }
+        .header-controls { display: flex; justify-content: space-between; align-items: center; }
+        .year-filter { margin-bottom: 1em; }
+        .year-filter label { font-weight: bold; margin-right: 10px; }
+        .year-filter select, .year-filter button { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        .year-filter button { background-color: #007bff; color: white; cursor: pointer; }
+        .chart-container { width: 80%; max-width: 1200px; margin: 2em auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-controls">
+            <div>
+                <p style="margin: 0;"><a href="{{ url_for('home') }}">&larr; Back to Dashboard</a></p>
+                <h1>Tickets Summary Report for {{ selected_year }}</h1>
+            </div>
+            <form class="year-filter" method="GET" action="{{ url_for('summary') }}">
+                <label for="year">Select Year:</label>
+                <select name="year" id="year">
+                    {% for year in available_years %}
+                    <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Filter</button>
+            </form>
+        </div>
+
+        <h2>Total Tickets by Service Type</h2>
+        <div class="chart-container">
+            <canvas id="serviceTypeChart"></canvas>
+        </div>
+
+        <h2>Detailed Breakdown</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Period</th>
+                    <th class="total">Total</th>
+                    {% for service in service_types %}
+                        <th>{{ service }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for month in months %}
+                <tr>
+                    <td>{{ month }}</td>
+                    <td class="total">{{ monthly_summary[month]['total'] }}</td>
+                    {% for service in service_types %}
+                        <td>{{ monthly_summary[month][service] }}</td>
+                    {% endfor %}
+                </tr>
+                {% if loop.index % 3 == 0 %}
+                    {% set q_num = loop.index // 3 %}
+                    <tr class="summary-row">
+                        <td>Q{{ q_num }} Total</td>
+                        <td class="total">{{ quarterly_summary['Q' + q_num|string]['total'] }}</td>
+                        {% for service in service_types %}
+                            <td>{{ quarterly_summary['Q' + q_num|string][service] }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="grand-total-row">
+                    <td><strong>Grand Total</strong></td>
+                    <td class="total">{{ grand_total.total }}</td>
+                    {% for service in service_types %}
+                        <td>{{ grand_total[service] }}</td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('serviceTypeChart');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ chart_labels | tojson }},
+                datasets: [{
+                    label: 'Total Tickets for {{ selected_year }}',
+                    data: {{ chart_data | tojson }},
+                    backgroundColor: [ // You can add more colors
+                        'rgba(255, 99, 132, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 159, 64, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
