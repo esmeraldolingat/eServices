@@ -33,8 +33,8 @@ app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25 MB limit
 app.config['MAIL_SERVER'] = 'smtp.googlemail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'tarlac.city@deped.gov.ph'  # PALITAN ITO
-app.config['MAIL_PASSWORD'] = 'awutrwsieameobrc'      # PALITAN ITO
+app.config['MAIL_USERNAME'] = 'your.email@deped.gov.ph'  # PALITAN ITO
+app.config['MAIL_PASSWORD'] = 'your-16-character-app-password'      # PALITAN ITO
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -80,7 +80,6 @@ class Ticket(db.Model):
     remarks_other = db.Column(db.String(255), nullable=True)
     employee_number = db.Column(db.String(50), nullable=True)
     date_of_last_appointment = db.Column(db.String(50), nullable=True)
-    # >>>>> ITO ANG IDINAGDAG <<<<<
     dpds_remarks = db.Column(db.String(100), nullable=True)
 
 
@@ -348,6 +347,3 @@ def summary():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
-    
-
