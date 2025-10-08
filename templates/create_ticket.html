@@ -62,6 +62,11 @@
                         {% for error in form.document_title.errors %}<span class="error">{{ error }}</span>{% endfor %}
                     </div>
                     <div class="form-group">
+                        {{ form.document_type.label }} {{ form.document_type(id='document_type_select') }}
+                        {% for error in form.document_type.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                    </div>
+                    <div class="form-group hidden" id="document_type_other_div">{{ form.document_type_other.label }} {{ form.document_type_other() }}</div>
+                    <div class="form-group">
                         {{ form.issuance_attachment.label }} {{ form.issuance_attachment() }}
                         {% for error in form.issuance_attachment.errors %}<span class="error">{{ error }}</span>{% endfor %}
                     </div>
@@ -75,7 +80,6 @@
                     </div>
                     <div class="form-group hidden" id="device_type_other_div">
                         {{ form.device_type_other.label }} {{ form.device_type_other() }}
-                        {% for error in form.device_type_other.errors %}<span class="error">{{ error }}</span>{% endfor %}
                     </div>
                      <div class="form-group">
                         {{ form.description.label }} {{ form.description() }}
@@ -114,10 +118,18 @@
                 <div id="shared_fields" class="dynamic-section hidden">
                     <div class="form-group">{{ form.school_name_text.label }} {{ form.school_name_text() }} {% for error in form.school_name_text.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
                     <div class="form-group">{{ form.contact_number.label }} {{ form.contact_number() }} {% for error in form.contact_number.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
+                    <div class="form-group">{{ form.school_id.label }} {{ form.school_id() }} {% for error in form.school_id.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
+                    
                     <!-- This div is for DPDS Remarks only -->
-                    <div class="form-group hidden" id="dpds_remarks_field">{{ form.dpds_remarks.label }} {{ form.dpds_remarks() }} {% for error in form.dpds_remarks.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
+                    <div class="form-group hidden" id="dpds_remarks_field">
+                        {{ form.dpds_remarks.label }} {{ form.dpds_remarks() }} 
+                        {% for error in form.dpds_remarks.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                    </div>
                     <!-- This div is for DCP/Other Description only -->
-                    <div class="form-group hidden" id="description_field_shared">{{ form.description.label }} {{ form.description() }} {% for error in form.description.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
+                    <div class="form-group hidden" id="description_field_shared">
+                        {{ form.description.label }} {{ form.description() }} 
+                        {% for error in form.description.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                    </div>
                 </div>
             </div>
             
@@ -128,7 +140,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // >>>>> ITO ANG INAYOS <<<<<
             const servicesByDept = {{ DEPARTMENTS_AND_SERVICES | tojson | safe }};
             
             const deptSelect = document.getElementById('department_select');
@@ -144,6 +155,7 @@
             };
 
             const otherFieldTriggers = [
+                { select: document.getElementById('document_type_select'), div: document.getElementById('document_type_other_div') },
                 { select: document.getElementById('device_type_select'), div: document.getElementById('device_type_other_div') },
                 { select: document.getElementById('position_select'), div: document.getElementById('position_other_div') },
                 { select: document.getElementById('remarks_select'), div: document.getElementById('remarks_other_div') }
@@ -175,6 +187,8 @@
                 
                 const dpdsRemarksField = document.getElementById('dpds_remarks_field');
                 const descriptionFieldShared = document.getElementById('description_field_shared');
+                
+                // Show/hide specific fields within the 'shared_fields' div
                 if (selectedService === 'DPDS - DepEd Partnership Database System') {
                     if(dpdsRemarksField) dpdsRemarksField.classList.remove('hidden');
                     if(descriptionFieldShared) descriptionFieldShared.classList.add('hidden');
@@ -191,7 +205,7 @@
             function toggleOtherFields() {
                 otherFieldTriggers.forEach(trigger => {
                     if (trigger.select && trigger.div) {
-                        if (trigger.select.value === 'Other') {
+                        if (trigger.select.closest('.dynamic-section').style.display !== 'none' && trigger.select.value === 'Other') {
                             trigger.div.classList.remove('hidden');
                         } else {
                             trigger.div.classList.add('hidden');
@@ -209,6 +223,23 @@
             updateServiceDropdown();
         });
     </script>
+	
+<script>
+function validateFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const maxSize = 25 * 1024 * 1024; // 25MB
+    const allowedType = 'application/pdf';
+
+    if (file.size > maxSize) {
+        alert("File size exceeds 25MB. Please upload a smaller file.");
+        input.value = "";
+    } else if (file.type !== allowedType) {
+        alert("Invalid file type. Only PDF files are allowed.");
+        input.value = "";
+    }
+}
+</script>
 </body>
 </html>
-

@@ -5,138 +5,161 @@
     <title>Ticket #{{ ticket.ticket_number }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; }
+        :root { --primary-color: #007bff; --light-gray: #f8f9fa; --gray: #6c757d; --dark-gray: #343a40; --border-color: #dee2e6; --danger-color: #dc3545; --success-color: #28a745; --white: #fff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 2em; background-color: var(--light-gray); }
         .container { max-width: 900px; margin: auto; }
-        .ticket-details { background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1, h2, h3 { color: #333; }
-        a { color: #007bff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .ticket-header { border-bottom: 2px solid #eee; padding-bottom: 1em; margin-bottom: 2em; }
-        .details-grid { display: grid; grid-template-columns: 200px 1fr; gap: 1em; margin-bottom: 2em; }
-        .details-grid strong { color: #555; }
+        .ticket-details { background: var(--white); padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: var(--dark-gray); border-bottom: 2px solid var(--border-color); padding-bottom: 0.5em;}
+        strong { display: inline-block; width: 220px; color: var(--gray);}
+        p { line-height: 1.8; border-bottom: 1px solid #f0f0f0; padding: 0.8em 0; margin: 0; }
+        p:last-child { border-bottom: none; }
+        .description-box { background-color: var(--light-gray); padding: 1em; border-left: 4px solid var(--primary-color); margin-top: 1em; white-space: pre-wrap; }
+        a { color: var(--primary-color); }
         .status-badge { padding: 0.3em 0.8em; border-radius: 12px; color: white; font-weight: bold; font-size: 0.9em; }
-        .status-New { background-color: #007bff; }
-        .status-In\.Progress { background-color: #ffc107; color: #333; }
-        .status-Resolved { background-color: #28a745; }
-        .resolution-box, .details-box { background-color: #f8f9fa; border-left: 5px solid; padding: 1.5em; margin: 2em 0; border-radius: 5px; }
-        .resolution-box { border-color: #28a745; }
-        .details-box { border-color: #007bff; }
-        .details-box p { margin: 0 0 10px 0; }
-        .details-box p:last-child { margin-bottom: 0; }
-        .details-box b { display: inline-block; width: 200px; }
-        form { margin-top: 2em; background-color: #f8f9fa; padding: 2em; border-radius: 8px; }
+        .status-New { background-color: var(--primary-color); }
+        .status-In\.Progress { background-color: #ffc107; color: var(--dark-gray); }
+        .status-Resolved { background-color: var(--success-color); }
         .form-group { margin-bottom: 1.5em; }
         label { display: block; margin-bottom: 0.5em; font-weight: 600; }
-        select, textarea { width: 100%; padding: 0.8em; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; font-size: 1em; font-family: inherit;}
-        textarea { min-height: 150px; }
-        input[type="submit"] { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; }
+        select, textarea { width: 100%; padding: 0.8em; font-size: 1em; border-radius: 4px; border: 1px solid var(--border-color); box-sizing: border-box; }
+        input[type="submit"] { background-color: var(--success-color); color: white; padding: 1em 2em; border: none; border-radius: 4px; font-size: 1em; cursor: pointer; }
+        input[type="submit"]:hover { background-color: #218838; }
+        .error { color: var(--danger-color); font-size: 0.9em; margin-top: 0.5em; display: block; }
     </style>
 </head>
 <body>
     <div class="container">
-        <p><a href="{{ url_for('home') }}">&larr; Back to Dashboard</a></p>
-
+        <p style="border-bottom: none; padding-bottom: 2em;"><a href="{{ url_for('home') }}">&larr; Back to Dashboard</a></p>
+        
         <div class="ticket-details">
-            <div class="ticket-header">
-                <h1>Ticket #{{ ticket.ticket_number }}</h1>
-            </div>
+            <h1>Ticket #{{ ticket.ticket_number }}</h1>
+            
+            <h2>Client Details</h2>
+            <p><strong>Status:</strong> <span class="status-badge status-{{ ticket.status.replace(' ', '.') }}">{{ ticket.status }}</span></p>
+            <p><strong>Client Name:</strong> {{ ticket.client_name }}</p>
+            <p><strong>Client Email:</strong> {{ ticket.client_email }}</p>
+            <p><strong>Department:</strong> {{ ticket.department }}</p>
+            <p><strong>Service Requested:</strong> {{ ticket.service_type }}</p>
+            <p><strong>Submitted On:</strong> {{ ticket.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
 
-            <h3>Client Details</h3>
-            <div class="details-grid">
-                <strong>Status:</strong>
-                <span><span class="status-badge status-{{ ticket.status.replace(' ', '.') }}">{{ ticket.status }}</span></span>
-                <strong>Client Name:</strong>
-                <span>{{ ticket.client_name }}</span>
-                <strong>Client Email:</strong>
-                <span>{{ ticket.client_email }}</span>
-                <strong>Department:</strong>
-                <span>{{ ticket.department }}</span>
-                <strong>Service Requested:</strong>
-                <span>{{ ticket.service_type }}</span>
-                <strong>Submitted On:</strong>
-                <span>{{ ticket.created_at.strftime('%B %d, %Y at %I:%M %p') }}</span>
-            </div>
-
-            <h3>Request Specifics</h3>
-            <div class="details-box">
-                {% if ticket.department == 'ICT' %}
-                    {% if ticket.service_type == 'Issuances and Online Materials' %}
-                        <p><b>Document Title:</b> {{ ticket.document_title or 'N/A' }}</p>
-                        {% if ticket.attachment_filename %}
-                        <p><b>Attachment:</b> <a href="{{ url_for('static', filename='uploads/' + ticket.attachment_filename) }}" target="_blank">{{ ticket.attachment_filename }}</a></p>
+            <h2>Request Specifics</h2>
+            
+            {% if ticket.department == 'ICT' %}
+                {% if ticket.service_type == 'Issuances and Online Materials' %}
+                    <p><strong>Document Title:</strong> {{ ticket.document_title or 'N/A' }}</p>
+                    <p><strong>Document Type:</strong> 
+                        {{ ticket.document_type or 'N/A' }}
+                        {% if ticket.document_type == 'Other' and ticket.document_type_other %}
+                            ({{ ticket.document_type_other }})
                         {% endif %}
-                    {% elif ticket.service_type == 'Repair, Maintenance and Troubleshoot of IT Equipment' %}
-                        {% set device = ticket.device_type_other if ticket.device_type == 'Other' else ticket.device_type %}
-                        <p><b>Device Type:</b> {{ device or 'N/A' }}</p>
-                        <p><b>Problem Description:</b> {{ ticket.description or 'N/A' }}</p>
-                    {% elif ticket.service_type == 'DepEd Email Account' %}
-                        <p><b>School ID:</b> {{ ticket.school_id or 'N/A' }}</p>
-                        <p><b>School Name:</b> {{ ticket.school_name or 'N/A' }}</p>
-                        <p><b>Full Name:</b> {{ ticket.personnel_first_name }} {{ ticket.personnel_middle_name }} {{ ticket.personnel_last_name }}</p>
-                        {% set position = ticket.position_other if ticket.position == 'Other' else ticket.position %}
-                        <p><b>Position:</b> {{ position or 'N/A' }}</p>
-                        {% set remarks = ticket.remarks_other if ticket.remarks == 'Other' else ticket.remarks %}
-                        <p><b>Request Remarks:</b> {{ remarks or 'N/A' }}</p>
-                        {% if ticket.attachment_filename %}
-                        <p><b>Certification:</b> <a href="{{ url_for('static', filename='uploads/' + ticket.attachment_filename) }}" target="_blank">{{ ticket.attachment_filename }}</a></p>
+                    </p>
+                {% elif ticket.service_type == 'Repair, Maintenance and Troubleshoot of IT Equipment' %}
+                    <p><strong>Device Type:</strong> 
+                        {{ ticket.device_type or 'N/A' }}
+                        {% if ticket.device_type == 'Other' and ticket.device_type_other %}
+                            ({{ ticket.device_type_other }})
                         {% endif %}
-                    {% elif ticket.service_type == 'DPDS - DepEd Partnership Database System' %}
-                        <p><b>School Name:</b> {{ ticket.school_name or 'N/A' }}</p>
-                        <p><b>Contact Number:</b> {{ ticket.contact_number or 'N/A' }}</p>
-                        <p><b>School ID:</b> {{ ticket.school_id or 'N/A' }}</p>
-                        <p><b>Remarks:</b> {{ ticket.dpds_remarks or 'N/A' }}</p>
-                    {% elif ticket.service_type in ['DCP - DepEd Computerization Program: After-sales', 'other ICT - Technical Assistance Needed'] %}
-                        <p><b>School Name:</b> {{ ticket.school_name or 'N/A' }}</p>
-                        <p><b>Contact Number:</b> {{ ticket.contact_number or 'N/A' }}</p>
-                        <p><b>Description:</b> {{ ticket.description or 'N/A' }}</p>
-                    {% endif %}
-                {% else %}
-                    <p>Details for this department will be configured soon.</p>
+                    </p>
+                    <div class="description-box">
+                        <strong>Problem Description:</strong><br>
+                        {{ ticket.description or 'No description provided.' }}
+                    </div>
+                {% elif ticket.service_type == 'DepEd Email Account' %}
+                    <p><strong>School ID:</strong> {{ ticket.school_id or 'N/A' }}</p>
+                    <p><strong>School Name:</strong> {{ ticket.school_name or 'N/A' }}</p>
+                    <p><strong>Full Name:</strong> {{ ticket.personnel_first_name }} {{ ticket.personnel_middle_name }} {{ ticket.personnel_last_name }}</p>
+                    <p><strong>Extension Name:</strong> {{ ticket.ext_name or 'N/A' }}</p>
+                    <p><strong>Sex:</strong> {{ ticket.sex or 'N/A' }}</p>
+                    <p><strong>Date of Birth:</strong> {{ ticket.date_of_birth or 'N/A' }}</p>
+                    <p><strong>Position:</strong> 
+                        {{ ticket.position or 'N/A' }}
+                        {% if ticket.position == 'Other' and ticket.position_other %}
+                            ({{ ticket.position_other }})
+                        {% endif %}
+                    </p>
+                    <p><strong>Existing Email / N/A:</strong> {{ ticket.existing_email_or_na or 'N/A' }}</p>
+                    <p><strong>Request Remarks:</strong> 
+                        {{ ticket.remarks or 'N/A' }}
+                        {% if ticket.remarks == 'Other' and ticket.remarks_other %}
+                            ({{ ticket.remarks_other }})
+                        {% endif %}
+                    </p>
+                {% elif ticket.service_type == 'DPDS - DepEd Partnership Database System' %}
+                    <p><strong>School Name:</strong> {{ ticket.school_name or 'N/A' }}</p>
+                    <p><strong>Contact Number:</strong> {{ ticket.contact_number or 'N/A' }}</p>
+                    <p><strong>School ID:</strong> {{ ticket.school_id or 'N/A' }}</p>
+                    <p><strong>Remarks:</strong> {{ ticket.dpds_remarks or 'N/A' }}</p>
+                {% elif ticket.service_type in ['DCP - DepEd Computerization Program: After-sales', 'other ICT - Technical Assistance Needed'] %}
+                    <p><strong>School Name:</strong> {{ ticket.school_name or 'N/A' }}</p>
+                    <p><strong>Contact Number:</strong> {{ ticket.contact_number or 'N/A' }}</p>
+                    <div class="description-box">
+                        <strong>Description:</strong><br>
+                        {{ ticket.description or 'No description provided.' }}
+                    </div>
                 {% endif %}
-            </div>
+                
+                {% if ticket.attachment_filename %}
+                    <p><strong>Attachment:</strong> <a href="{{ url_for('static', filename='uploads/' + ticket.attachment_filename) }}" target="_blank">{{ ticket.attachment_filename }}</a></p>
+                {% endif %}
+            {% else %}
+                <p>No specific details form implemented yet for this department.</p>
+            {% endif %}
 
             {% if ticket.resolution_details %}
-            <div class="resolution-box">
-                <h3>Resolution Details</h3>
-                <p>{{ ticket.resolution_details | replace('\n', '<br>') | safe }}</p>
+            <div class="description-box" style="margin-top: 2em; border-left-color: var(--success-color);">
+                <strong>Resolution Details:</strong><br>
+                {{ ticket.resolution_details }}
             </div>
             {% endif %}
 
+            <hr style="margin-top: 2em; margin-bottom: 2em;">
             <h2>Update Ticket</h2>
-            <form method="POST">
+            <form method="POST" action="">
                 {{ form.hidden_tag() }}
-                <div class="form-group">{{ form.status.label }} {{ form.status() }}</div>
-                <div class="form-group">{{ form.canned_response.label }} {{ form.canned_response(id='canned_response_select') }}</div>
-                <div class="form-group">{{ form.resolution_details.label }} {{ form.resolution_details(id='resolution_details_textarea') }}</div>
-                <div class="form-group">{{ form.submit() }}</div>
+                <div class="form-group">
+                    {{ form.status.label }}
+                    {{ form.status() }}
+                    {% for error in form.status.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                </div>
+                <div class="form-group">
+                    {{ form.canned_response.label }}
+                    {{ form.canned_response(id='canned_response_select') }}
+                </div>
+                <div class="form-group">
+                    {{ form.resolution_details.label }}
+                    {{ form.resolution_details(rows=6, id='resolution_details_textarea') }}
+                    {% for error in form.resolution_details.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                </div>
+                <div class="form-group">
+                    {{ form.submit() }}
+                </div>
             </form>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const cannedResponses = {{ CANNED_RESPONSES | tojson | safe }};
-            const ticketDepartment = '{{ ticket.department }}'; 
-
+            const cannedResponsesByDept = {{ CANNED_RESPONSES | tojson | safe }};
+            const ticketDepartment = '{{ ticket.department }}';
             const cannedSelect = document.getElementById('canned_response_select');
             const resolutionTextarea = document.getElementById('resolution_details_textarea');
 
-            if (cannedResponses[ticketDepartment]) {
-                cannedResponses[ticketDepartment].forEach(response => {
+            if (cannedResponsesByDept[ticketDepartment]) {
+                cannedResponsesByDept[ticketDepartment].forEach(response => {
                     const option = document.createElement('option');
                     option.value = response;
-                    option.textContent = response;
+                    option.textContent = response.length > 90 ? response.substring(0, 90) + '...' : response;
                     cannedSelect.appendChild(option);
                 });
             }
 
             cannedSelect.addEventListener('change', function() {
-                if (this.value) {
-                    resolutionTextarea.value += (resolutionTextarea.value ? '\n\n' : '') + this.value;
+                const selectedText = this.value;
+                if (selectedText) {
+                    resolutionTextarea.value += (resolutionTextarea.value ? '\n\n' : '') + selectedText;
                 }
             });
         });
     </script>
 </body>
 </html>
-

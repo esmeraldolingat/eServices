@@ -1,0 +1,13 @@
+# Virtual Environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+
+# Instance folder (for sensitive data)
+instance/
+
+# IDE and editor folders
+.idea/
+.vscode/
