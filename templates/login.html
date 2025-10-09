@@ -1,101 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Admin Login - TCSD e-Services</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f8f9fa;
-        }
-        .login-container {
-            background: white;
-            padding: 2.5em;
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-        .login-container img {
-            max-width: 120px;
-            margin-bottom: 1em;
-        }
-        .login-container h1 {
-            margin-bottom: 1.5em;
-            color: #343a40;
-        }
-        .form-group {
-            margin-bottom: 1.5em;
-            text-align: left;
-        }
-        label {
-            display: block;
-            margin-bottom: 0.5em;
-            font-weight: 600;
-        }
-        input[type="text"], input[type="password"] {
-            width: 100%;
-            padding: 0.8em;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-        input[type="submit"] {
-            width: 100%;
-            padding: 0.8em;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1.1em;
-            font-weight: 600;
-        }
-        .flash-error {
-            color: #721c24;
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
-            padding: .75rem 1.25rem;
-            margin-bottom: 1rem;
-            border: 1px solid transparent;
-            border-radius: .25rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="login-container">
-        <img src="https://depedtarlaccity.com/wp-content/uploads/2025/02/logo_TCSD_header.png" alt="Logo">
-        <h1>Admin Login</h1>
-        
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    {% if category == 'error' %}
-                        <div class="flash-error">{{ message }}</div>
-                    {% endif %}
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm" style="border-radius: 15px;">
+                <div class="card-body p-4 p-md-5">
+                    
+                    <div class="text-center mb-4">
+                        <h2 class="fw-bold">Admin Login</h2>
+                    </div>
 
-        <form method="POST">
-            {{ form.hidden_tag() }}
-            <div class="form-group">
-                {{ form.username.label }}
-                {{ form.username() }}
+                    <form method="POST" action="">
+                        {{ form.hidden_tag() }}
+
+                        <div class="form-floating mb-3">
+                            {{ form.username(class="form-control", id="floatingInput", placeholder="Username") }}
+                            {{ form.username.label(for="floatingInput") }}
+                        </div>
+                        <div class="form-floating mb-3">
+                            {{ form.password(class="form-control", id="floatingPassword", placeholder="Password") }}
+                            {{ form.password.label(for="floatingPassword") }}
+                        </div>
+
+                        <div class="d-grid">
+                            {{ form.submit(class="btn btn-primary btn-lg") }}
+                        </div>
+                    </form>
+
+                </div>
             </div>
-            <div class="form-group">
-                {{ form.password.label }}
-                {{ form.password() }}
-            </div>
-            {{ form.submit() }}
-        </form>
+        </div>
     </div>
-</body>
-</html>
+</div>
+{% endblock content %}

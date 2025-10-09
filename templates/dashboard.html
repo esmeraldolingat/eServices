@@ -1,127 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>ICT Services Dashboard</title>
-    <style>
-        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; }
-        .container { max-width: 1200px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        .button { background-color: #007bff; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 2em; }
-        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
-        th { background-color: #e9ecef; }
-        
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        
-        tr:hover { background-color: #ddd !important; }
-        a { color: #007bff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        
-        .status-badge { padding: 0.3em 0.8em; border-radius: 12px; color: white; font-weight: bold; font-size: 0.9em; }
-        .status-New { background-color: #007bff; }
-        .status-In\.Progress { background-color: #ffc107; color: #333; }
-        .status-Resolved { background-color: #28a745; }
-        
-        .status-row-In-Progress { background-color: #fff8e1 !important; }
-        .status-row-Resolved { background-color: #e8f5e9 !important; }
+{% extends "layout.html" %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2">Dashboard</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('select_service') }}" class="btn btn-sm btn-outline-primary">
+                Create New Ticket
+            </a>
+            {# <a href="{{ url_for('summary') }}" class="btn btn-sm btn-outline-secondary ms-2">View Summary Report</a> #}
+        </div>
+    </div>
 
-        .filter-form { background-color: #f8f9fa; padding: 1.5em; border-radius: 5px; margin-bottom: 2em; display: flex; gap: 1em; align-items: center; }
-        .filter-form input, .filter-form select { padding: 0.8em; border: 1px solid #ccc; border-radius: 4px; }
-        .filter-form button { padding: 0.8em 1.2em; border: none; background-color: #28a745; color: white; border-radius: 4px; cursor: pointer; }
-
-        /* --- BAGONG CSS PARA SA PAGINATION --- */
-        .pagination { margin-top: 2em; text-align: center; }
-        .pagination a, .pagination span {
-            display: inline-block;
-            padding: 8px 16px;
-            margin: 0 4px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            color: #007bff;
-            text-decoration: none;
-        }
-        .pagination .disabled {
-            color: #aaa;
-            border-color: #ddd;
-        }
-        .pagination .active {
-            background-color: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>ICT Services Dashboard</h1>
-        <a href="{{ url_for('create_ticket') }}" class="button">Create New Ticket</a>
-		<a href="{{ url_for('summary') }}" class="button" style="background-color: #17a2b8; margin-left: 10px;">View Summary Report</a>
-
-        <form method="GET" action="{{ url_for('home') }}" class="filter-form">
-            <input type="text" name="search" placeholder="Search by Ticket#, Name, Service..." value="{{ search_query or '' }}">
-            <select name="status">
-                <option value="Active" {% if status_filter == 'Active' %}selected{% endif %}>Active Tickets</option>
-                <option value="" {% if status_filter == '' %}selected{% endif %}>All Tickets</option>
-                <option value="New" {% if status_filter == 'New' %}selected{% endif %}>New Only</option>
-                <option value="In Progress" {% if status_filter == 'In Progress' %}selected{% endif %}>In Progress Only</option>
-                <option value="Resolved" {% if status_filter == 'Resolved' %}selected{% endif %}>Resolved Only</option>
-            </select>
-            <button type="submit">Filter</button>
-        </form>
-
-        <table>
+    <h2>All Tickets</h2>
+    <div class="table-responsive">
+        <table class="table table-striped table-sm">
             <thead>
                 <tr>
                     <th>Ticket #</th>
-                    <th>Client Name</th>
-                    <th>Service Type</th>
-                    <th>Submitted On</th>
+                    <th>Requester</th>
+                    <th>Department</th>
+                    <th>Service</th>
                     <th>Status</th>
+                    <th>Date Created</th>
                 </tr>
             </thead>
             <tbody>
-                {% for ticket in all_tickets %}
-                <tr class="status-row-{{ ticket.status.replace(' ', '-') }}">
-                    <td><a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a></td>
-                    <td>{{ ticket.client_name }}</td>
-                    <td>{{ ticket.service_type }}</td>
-                    <td>{{ ticket.created_at.strftime('%Y-%m-%d %I:%M %p') }}</td>
-                    <td><span class="status-badge status-{{ ticket.status.replace(' ', '.') }}">{{ ticket.status }}</span></td>
-                </tr>
+                {% if tickets %}
+                    {% for ticket in tickets %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a>
+                        </td>
+                        <td>{{ ticket.requester_name }}</td>
+                        <td>{{ ticket.ticket_department.name }}</td>
+                        <td>{{ ticket.service_type.name }}</td>
+                        <td><span class="badge bg-primary">{{ ticket.status }}</span></td>
+                        <td>{{ ticket.date_posted.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
                 {% else %}
-                <tr>
-                    <td colspan="5">No tickets found for the selected filter.</td>
-                </tr>
-                {% endfor %}
+                    <tr>
+                        <td colspan="6" class="text-center">No tickets found.</td>
+                    </tr>
+                {% endif %}
             </tbody>
         </table>
-
-        <div class="pagination">
-            {% if pagination.has_prev %}
-                <a href="{{ url_for('home', page=pagination.prev_num, search=search_query, status=status_filter) }}">&laquo; Previous</a>
-            {% else %}
-                <span class="disabled">&laquo; Previous</span>
-            {% endif %}
-
-            {% for page_num in pagination.iter_pages() %}
-                {% if page_num %}
-                    {% if pagination.page == page_num %}
-                        <span class="active">{{ page_num }}</span>
-                    {% else %}
-                        <a href="{{ url_for('home', page=page_num, search=search_query, status=status_filter) }}">{{ page_num }}</a>
-                    {% endif %}
-                {% else %}
-                    <span>...</span>
-                {% endif %}
-            {% endfor %}
-
-            {% if pagination.has_next %}
-                <a href="{{ url_for('home', page=pagination.next_num, search=search_query, status=status_filter) }}">&raquo; Next</a>
-            {% else %}
-                <span class="disabled">&raquo; Next</span>
-            {% endif %}
-        </div>
     </div>
-</body>
-</html>
+</div>
+{% endblock content %}
