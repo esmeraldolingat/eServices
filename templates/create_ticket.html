@@ -1,245 +1,187 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>e-Services Request Form</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        :root { --primary-color: #007bff; --light-gray: #f8f9fa; --gray: #6c757d; --dark-gray: #343a40; --border-color: #dee2e6; --danger-color: #dc3545; --success-color: #28a745; --white: #fff; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: var(--light-gray); color: var(--dark-gray); display: flex; justify-content: center; padding: 2em 1em; }
-        .container { max-width: 800px; width: 100%; background: var(--white); padding: 2.5em; border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1); }
-        .form-header { text-align: center; margin-bottom: 2.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 1.5em; }
-        .form-header img { max-width: 150px; margin-bottom: 1em; }
-        .form-header h1 { font-size: 1.8em; margin: 0; color: var(--dark-gray); }
-        .form-header p { margin: 0.5em 0 0; color: var(--gray); font-size: 0.9em; }
-        .form-group { margin-bottom: 1.5em; }
-        .form-group label { display: block; margin-bottom: 0.5em; font-weight: 600; font-size: 1.1em; }
-        input[type="text"], input[type="email"], input[type="date"], textarea, select { width: 100%; padding: 0.8em; font-size: 1.1em; font-family: inherit; border-radius: 6px; border: 1px solid var(--border-color); box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s; }
-        input[type="text"]:focus, input[type="email"]:focus, input[type="date"]:focus, textarea:focus, select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); outline: none; }
-        textarea { resize: vertical; min-height: 120px; }
-        .form-group.checkbox { display: flex; align-items: center; }
-        .form-group.checkbox input { margin-right: 10px; width: auto; }
-        .form-group.checkbox label { margin-bottom: 0; font-weight: normal; font-size: 1em; }
-        .error { color: var(--danger-color); font-size: 0.9em; margin-top: 0.5em; display: block; }
-        input[type="submit"] { background-color: var(--primary-color); color: white; padding: 1em 2em; border: none; border-radius: 6px; font-size: 1em; font-weight: 600; cursor: pointer; width: 100%; transition: background-color 0.2s; }
-        input[type="submit"]:hover { background-color: #0056b3; }
-        .hidden { display: none; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="form-header">
-            <img src="https://depedtarlaccity.com/wp-content/uploads/2025/02/logo_TCSD_header.png" alt="Tarlac City Schools Division Logo">
-            <h1>e-Services Request Form</h1>
-            <p>FOR TARLAC CITY SCHOOLS DIVISION ONLY</p>
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h4 class="mb-0">
+                Request for {{ selected_service or 'Service Ticket' }}
+            </h4>
+            <small class="text-muted">Department: {{ department_name or 'Select Department' }}</small>
         </div>
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
 
-        <form method="POST" enctype="multipart/form-data" novalidate>
-            {{ form.hidden_tag() }}
-
-            <div class="form-group">
-                {{ form.client_name.label }} {{ form.client_name() }}
-                {% for error in form.client_name.errors %}<span class="error">{{ error }}</span>{% endfor %}
-            </div>
-            <div class="form-group">
-                {{ form.client_email.label }} {{ form.client_email() }}
-                {% for error in form.client_email.errors %}<span class="error">{{ error }}</span>{% endfor %}
-            </div>
-            <div class="form-group">
-                {{ form.department.label }} {{ form.department(id='department_select') }}
-                {% for error in form.department.errors %}<span class="error">{{ error }}</span>{% endfor %}
-            </div>
-            <div class="form-group">
-                {{ form.service_type.label }} {{ form.service_type(id='service_type_select') }}
-                {% for error in form.service_type.errors %}<span class="error">{{ error }}</span>{% endfor %}
-            </div>
-
-            <div id="dynamic-sections">
-                <!-- ISSUANCES -->
-                <div id="issuances" class="dynamic-section hidden">
-                    <div class="form-group">
-                        {{ form.document_title.label }} {{ form.document_title() }}
-                        {% for error in form.document_title.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                <!-- Your Information -->
+                <div class="card mb-3 border-0">
+                    <div class="card-header bg-light">
+                        <i class="bi bi-person-fill"></i> Your Information
                     </div>
-                    <div class="form-group">
-                        {{ form.document_type.label }} {{ form.document_type(id='document_type_select') }}
-                        {% for error in form.document_type.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                    </div>
-                    <div class="form-group hidden" id="document_type_other_div">{{ form.document_type_other.label }} {{ form.document_type_other() }}</div>
-                    <div class="form-group">
-                        {{ form.issuance_attachment.label }} {{ form.issuance_attachment() }}
-                        {% for error in form.issuance_attachment.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                    <div class="card-body">
+                        <div class="form-group mb-3">
+                            {{ form.full_name.label(class="form-label") }}
+                            {{ form.full_name(class="form-control") }}
+                            {% for error in form.full_name.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+
+                        <div class="form-group mb-3">
+                            {{ form.deped_email.label(class="form-label") }}
+                            {{ form.deped_email(class="form-control") }}
+                            {% for error in form.deped_email.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+
+                        <div class="form-group mb-3">
+                            {{ form.contact_number.label(class="form-label") }}
+                            {{ form.contact_number(class="form-control") }}
+                            {% for error in form.contact_number.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
+
+                        <div class="form-group mb-3">
+                            {{ form.school_office.label(class="form-label") }}
+                            {{ form.school_office(class="form-select") }}
+                            {% for error in form.school_office.errors %}
+                                <small class="text-danger">{{ error }}</small>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
 
-                <!-- REPAIR -->
-                <div id="repair" class="dynamic-section hidden">
-                    <div class="form-group">
-                        {{ form.device_type.label }} {{ form.device_type(id='device_type_select') }}
-                        {% for error in form.device_type.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                <!-- Request Details -->
+                <div class="card border-0">
+                    <div class="card-header bg-light">
+                        <i class="bi bi-file-earmark-text"></i> Request Details
                     </div>
-                    <div class="form-group hidden" id="device_type_other_div">
-                        {{ form.device_type_other.label }} {{ form.device_type_other() }}
-                    </div>
-                     <div class="form-group">
-                        {{ form.description.label }} {{ form.description() }}
-                        {% for error in form.description.errors %}<span class="error">{{ error }}</span>{% endfor %}
+                    <div class="card-body">
+
+                        <!-- ICT-related Sections -->
+                        <div id="issuances" class="dynamic-section hidden"></div>
+                        <div id="repair" class="dynamic-section hidden"></div>
+                        <div id="deped_email" class="dynamic-section hidden"></div>
+                        <div id="shared_fields" class="dynamic-section hidden"></div>
+
+                        <!-- PERSONNEL SERVICES -->
+                        <div id="personnel" class="dynamic-section hidden">
+                            <div class="form-group mb-3">
+                                {{ form.position.label(class="form-label") }}
+                                {{ form.position(class="form-control") }}
+                                {% for error in form.position.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                {{ form.bp_number.label(class="form-label") }}
+                                {{ form.bp_number(class="form-control") }}
+                                {% for error in form.bp_number.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                {{ form.purpose.label(class="form-label") }}
+                                {{ form.purpose(class="form-control") }}
+                                {% for error in form.purpose.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                {{ form.attachment.label(class="form-label") }}
+                                {{ form.attachment(class="form-control") }}
+                                {% for error in form.attachment.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- LEGAL SERVICES -->
+                        <div id="no_pending_case" class="dynamic-section hidden">
+                            <div class="form-group mb-3">
+                                {{ form.position.label(class="form-label") }}
+                                {{ form.position(class="form-control") }}
+                                {% for error in form.position.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                {{ form.purpose.label(class="form-label") }}
+                                {{ form.purpose(class="form-control", rows="3") }}
+                                {% for error in form.purpose.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+
+                            <div class="form-group mb-3">
+                                {{ form.attachment.label(class="form-label") }}
+                                {{ form.attachment(class="form-control") }}
+                                {% for error in form.attachment.errors %}
+                                    <small class="text-danger">{{ error }}</small>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- DEPED EMAIL -->
-                <div id="deped_email" class="dynamic-section hidden">
-                    <div class="form-group">{{ form.school_id.label }} {{ form.school_id() }} {% for error in form.school_id.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.school_name_select.label }} {{ form.school_name_select() }} {% for error in form.school_name_select.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.personnel_first_name.label }} {{ form.personnel_first_name() }} {% for error in form.personnel_first_name.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.personnel_middle_name.label }} {{ form.personnel_middle_name() }} {% for error in form.personnel_middle_name.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.personnel_last_name.label }} {{ form.personnel_last_name() }} {% for error in form.personnel_last_name.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.ext_name.label }} {{ form.ext_name() }}</div>
-                    <div class="form-group">{{ form.sex.label }} {{ form.sex() }} {% for error in form.sex.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.date_of_birth.label }} {{ form.date_of_birth() }} {% for error in form.date_of_birth.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">
-                        {{ form.position.label }} {{ form.position(id='position_select') }}
-                        {% for error in form.position.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                    </div>
-                    <div class="form-group hidden" id="position_other_div">{{ form.position_other.label }} {{ form.position_other() }}</div>
-                    <div class="form-group">{{ form.existing_email_or_na.label }} {{ form.existing_email_or_na() }} {% for error in form.existing_email_or_na.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">
-                        {{ form.remarks.label }} {{ form.remarks(id='remarks_select') }}
-                        {% for error in form.remarks.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                    </div>
-                    <div class="form-group hidden" id="remarks_other_div">{{ form.remarks_other.label }} {{ form.remarks_other() }}</div>
-                    <div class="form-group">
-                        {{ form.certification_attachment.label }} {{ form.certification_attachment() }}
-                        {% for error in form.certification_attachment.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                    </div>
+                <!-- Action Buttons -->
+                <div class="mt-4 text-end">
+                    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
+                        ← Back
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        Submit Ticket
+                    </button>
                 </div>
-
-                <!-- DPDS, DCP & OTHER (SHARED FIELDS) -->
-                <div id="shared_fields" class="dynamic-section hidden">
-                    <div class="form-group">{{ form.school_name_text.label }} {{ form.school_name_text() }} {% for error in form.school_name_text.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.contact_number.label }} {{ form.contact_number() }} {% for error in form.contact_number.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    <div class="form-group">{{ form.school_id.label }} {{ form.school_id() }} {% for error in form.school_id.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-                    
-                    <!-- This div is for DPDS Remarks only -->
-                    <div class="form-group hidden" id="dpds_remarks_field">
-                        {{ form.dpds_remarks.label }} {{ form.dpds_remarks() }} 
-                        {% for error in form.dpds_remarks.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                    </div>
-                    <!-- This div is for DCP/Other Description only -->
-                    <div class="form-group hidden" id="description_field_shared">
-                        {{ form.description.label }} {{ form.description() }} 
-                        {% for error in form.description.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-group checkbox">{{ form.privacy_agreement() }} {{ form.privacy_agreement.label }} {% for error in form.privacy_agreement.errors %}<span class="error">{{ error }}</span>{% endfor %}</div>
-            <div class="form-group">{{ form.submit() }}</div>
-        </form>
+            </form>
+        </div>
     </div>
+</div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const servicesByDept = {{ DEPARTMENTS_AND_SERVICES | tojson | safe }};
-            
-            const deptSelect = document.getElementById('department_select');
-            const serviceSelect = document.getElementById('service_type_select');
-            
-            const sections = {
-                'Issuances and Online Materials': document.getElementById('issuances'),
-                'Repair, Maintenance and Troubleshoot of IT Equipment': document.getElementById('repair'),
-                'DepEd Email Account': document.getElementById('deped_email'),
-                'DPDS - DepEd Partnership Database System': document.getElementById('shared_fields'),
-                'DCP - DepEd Computerization Program: After-sales': document.getElementById('shared_fields'),
-                'other ICT - Technical Assistance Needed': document.getElementById('shared_fields')
-            };
-
-            const otherFieldTriggers = [
-                { select: document.getElementById('document_type_select'), div: document.getElementById('document_type_other_div') },
-                { select: document.getElementById('device_type_select'), div: document.getElementById('device_type_other_div') },
-                { select: document.getElementById('position_select'), div: document.getElementById('position_other_div') },
-                { select: document.getElementById('remarks_select'), div: document.getElementById('remarks_other_div') }
-            ];
-            
-            function updateServiceDropdown() {
-                const selectedDept = deptSelect.value;
-                serviceSelect.innerHTML = '<option value="">-- Select a Service --</option>';
-                if (selectedDept && servicesByDept[selectedDept]) {
-                    servicesByDept[selectedDept].forEach(service => {
-                        const option = document.createElement('option');
-                        option.value = service;
-                        option.textContent = service;
-                        serviceSelect.appendChild(option);
-                    });
-                }
-                toggleSections();
-            }
-
-            function toggleSections() {
-                const selectedService = serviceSelect.value;
-                Object.values(sections).forEach(section => {
-                    if(section) section.classList.add('hidden');
-                });
-
-                if (sections[selectedService]) {
-                    sections[selectedService].classList.remove('hidden');
-                }
-                
-                const dpdsRemarksField = document.getElementById('dpds_remarks_field');
-                const descriptionFieldShared = document.getElementById('description_field_shared');
-                
-                // Show/hide specific fields within the 'shared_fields' div
-                if (selectedService === 'DPDS - DepEd Partnership Database System') {
-                    if(dpdsRemarksField) dpdsRemarksField.classList.remove('hidden');
-                    if(descriptionFieldShared) descriptionFieldShared.classList.add('hidden');
-                } else if (selectedService === 'DCP - DepEd Computerization Program: After-sales' || selectedService === 'other ICT - Technical Assistance Needed') {
-                    if(dpdsRemarksField) dpdsRemarksField.classList.add('hidden');
-                    if(descriptionFieldShared) descriptionFieldShared.classList.remove('hidden');
-                } else {
-                     if(dpdsRemarksField) dpdsRemarksField.classList.add('hidden');
-                     if(descriptionFieldShared) descriptionFieldShared.classList.add('hidden');
-                }
-                toggleOtherFields();
-            }
-
-            function toggleOtherFields() {
-                otherFieldTriggers.forEach(trigger => {
-                    if (trigger.select && trigger.div) {
-                        if (trigger.select.closest('.dynamic-section').style.display !== 'none' && trigger.select.value === 'Other') {
-                            trigger.div.classList.remove('hidden');
-                        } else {
-                            trigger.div.classList.add('hidden');
-                        }
-                    }
-                });
-            }
-            
-            deptSelect.addEventListener('change', updateServiceDropdown);
-            serviceSelect.addEventListener('change', toggleSections);
-            otherFieldTriggers.forEach(trigger => {
-                if(trigger.select) trigger.select.addEventListener('change', toggleOtherFields)
-            });
-            
-            updateServiceDropdown();
-        });
-    </script>
-	
+<!-- Dynamic Section Handling -->
 <script>
-function validateFile(input) {
-    const file = input.files[0];
-    if (!file) return;
+document.addEventListener("DOMContentLoaded", function() {
+    const sections = {
+        'Issuances and Online Materials': document.getElementById('issuances'),
+        'Repair, Maintenance and Troubleshoot of IT Equipment': document.getElementById('repair'),
+        'DepEd Email Account': document.getElementById('deped_email'),
+        'DPDS - DepEd Partnership Database System': document.getElementById('shared_fields'),
+        'DCP - DepEd Computerization Program: After-sales': document.getElementById('shared_fields'),
+        'other ICT - Technical Assistance Needed': document.getElementById('shared_fields'),
+        'Personnel Services': document.getElementById('personnel'),
+        'Certificate of NO-Pending Case': document.getElementById('no_pending_case')
+    };
 
-    const maxSize = 25 * 1024 * 1024; // 25MB
-    const allowedType = 'application/pdf';
-
-    if (file.size > maxSize) {
-        alert("File size exceeds 25MB. Please upload a smaller file.");
-        input.value = "";
-    } else if (file.type !== allowedType) {
-        alert("Invalid file type. Only PDF files are allowed.");
-        input.value = "";
+    const serviceTypeSelect = document.getElementById('serviceTypeSelect');
+    if (serviceTypeSelect) {
+        serviceTypeSelect.addEventListener('change', function() {
+            Object.values(sections).forEach(section => section.classList.add('hidden'));
+            const selected = this.value;
+            if (sections[selected]) {
+                sections[selected].classList.remove('hidden');
+            }
+        });
     }
-}
+});
 </script>
-</body>
-</html>
+
+<style>
+.hidden {
+    display: none;
+}
+.card {
+    border-radius: 12px;
+}
+.card-header {
+    font-weight: 600;
+}
+.btn {
+    border-radius: 8px;
+}
+</style>
+{% endblock %}

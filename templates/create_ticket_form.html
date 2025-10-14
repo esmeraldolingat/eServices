@@ -28,22 +28,20 @@
                                     {% if field.name not in ['requester_name', 'requester_email', 'requester_contact', 'school', 'csrf_token', 'submit'] %}
                                         <div class="form-group mb-3" id="div_{{ field.name }}">
                                             {{ field.label(class="form-control-label") }}
-                                            
                                             {% if field.type == 'FileField' %}
                                                 {{ field(class="form-control", accept=".pdf") }}
                                             {% else %}
                                                 {{ field(class="form-control form-control-lg") }}
                                             {% endif %}
-                                            
                                             {% for error in field.errors %}
                                                 <span class="text-danger">{{ error }}</span>
                                             {% endfor %}
                                         </div>
                                     {% endif %}
                                 {% endfor %}
-
                             </fieldset>
                         </div>
+                        
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                             <a href="{{ url_for('select_service', department_id=service.department.id) }}" class="btn btn-outline-secondary btn-lg">
                                 ← Back
@@ -57,30 +55,58 @@
     </div>
 </div>
 
-{# JAVASCRIPT FOR CONDITIONAL "OTHER" FIELDS (No changes needed here) #}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const conditionalSelects = document.querySelectorAll('select[name$="_type"], select[name="remarks"]');
+        // --- Logic for "Other" textboxes ---
+        const allSelects = document.querySelectorAll('form select');
+        allSelects.forEach(setupConditionalLogicForOther);
 
-        function toggleOtherField(selectElement) {
+        function setupConditionalLogicForOther(selectElement) {
             const otherFieldName = selectElement.name + '_other';
             const otherFieldDiv = document.getElementById('div_' + otherFieldName);
+            if (!otherFieldDiv) return;
 
-            if (otherFieldDiv) {
-                if (selectElement.value === 'Other') {
-                    otherFieldDiv.style.display = 'block';
-                } else {
-                    otherFieldDiv.style.display = 'none';
-                }
+            function toggle() {
+                otherFieldDiv.style.display = (selectElement.value === 'Other') ? 'block' : 'none';
             }
+            toggle();
+            selectElement.addEventListener('change', toggle);
         }
 
-        conditionalSelects.forEach(function(select) {
-            toggleOtherField(select);
-            select.addEventListener('change', function() {
-                toggleOtherField(this);
-            });
-        });
+        // --- Logic for COE Remarks (unchanged) ---
+        const coeRemarksSelect = document.querySelector('select[name="remarks"]');
+        if (coeRemarksSelect) {
+            const withCompFields = ['div_first_day_cert_attachment', 'div_coe_wo_comp_attachment'];
+            const withoutCompFields = ['div_payslip_attachment', 'div_coe_w_comp_attachment'];
+            
+            function toggleCoeFields() {
+                const selectedValue = coeRemarksSelect.value;
+                withCompFields.forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) el.style.display = (selectedValue === 'With Compensation') ? 'block' : 'none';
+                });
+                withoutCompFields.forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) el.style.display = (selectedValue === 'Without Compensation') ? 'block' : 'none';
+                });
+            }
+            toggleCoeFields();
+            coeRemarksSelect.addEventListener('change', toggleCoeFields);
+        }
+
+        // --- NEW: Logic for GSIS "Previous Appointment" ---
+        const prevAppointmentSelect = document.querySelector('select[name="previous_appointment"]');
+        if (prevAppointmentSelect) {
+            const agencyFieldDiv = document.getElementById('div_previous_agency');
+            
+            function toggleAgencyField() {
+                if (agencyFieldDiv) {
+                    agencyFieldDiv.style.display = (prevAppointmentSelect.value === 'Yes') ? 'block' : 'none';
+                }
+            }
+            toggleAgencyField(); // Run on page load
+            prevAppointmentSelect.addEventListener('change', toggleAgencyField);
+        }
     });
 </script>
 {% endblock content %}
