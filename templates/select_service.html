@@ -1,23 +1,107 @@
-{% extends "layout.html" %} {% block content %}
+{% extends "layout.html" %}
+{% block content %}
 <div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header"><h2>{{ title }}</h2></div>
-                <div class="card-body">
-                    <form method="POST" action="">
-                        {{ form.hidden_tag() }}
-                        <div class="form-group">
-                            <label for="service" class="form-control-label">Piliin ang Serbisyo</label>
-                            {{ form.service(class="form-control form-control-lg") }}
-                        </div>
-                        <div class="form-group mt-4">
-                            {{ form.submit(class="btn btn-primary") }}
-                        </div>
-                    </form>
+
+    <div class="text-center pt-4 pb-5">
+        <h1 class="display-5 fw-bold">{{ title }}</h1>
+        <p class="lead text-muted">Step 2: Please choose the specific service you need.</p>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+        {% for service in services %}
+        <div class="col-md-6 col-lg-4">
+            <a href="{{ url_for('create_ticket_form', service_id=service.id) }}" class="text-decoration-none text-dark">
+                <div class="card h-100 shadow-sm text-center p-4 border-0 rounded-4 card-hover">
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        
+                        <i class="
+                            {# ICT Services #}
+                            {% if 'Issuances' in service.name %} bi-file-earmark-text
+                            {% elif 'Repair' in service.name %} bi-tools
+                            {% elif 'Email' in service.name %} bi-envelope-at
+                            {% elif 'DPDS' in service.name %} bi-database-check
+                            {% elif 'DCP' in service.name %} bi-display
+                            
+                            {# Personnel Services #}
+                            {% elif 'Leave' in service.name %} bi-calendar-check
+                            {% elif 'Employment' in service.name %} bi-file-earmark-person
+                            {% elif 'Service Record' in service.name %} bi-journal-text
+                            {% elif 'GSIS' in service.name %} bi-person-vcard
+
+                            {# Legal Services #}
+                            {% elif 'Pending Case' in service.name %} bi-patch-check
+
+                            {# Office of the SDS Services #}
+                            {% elif 'Locator Slip' in service.name %} bi-geo-alt
+                            {% elif 'Travel' in service.name %} bi-airplane
+                            {% elif 'Officer-in-Charge' in service.name %} bi-person-check
+                            {% elif 'Substitute Teacher' in service.name %} bi-person-plus
+                            {% elif 'Alternative Delivery' in service.name %} bi-house-door
+                            
+                            {# Accounting Unit Services #}
+                            {% elif 'Provident' in service.name %} bi-piggy-bank
+
+                            {# Supply Office Services #}
+                            {% elif 'Inventory' in service.name %} bi-clipboard-check
+
+                            {# Fallback Icon #}
+                            {% else %} bi-grid-1x2 {% endif %}
+                            display-4 text-primary mb-3"></i>
+
+                        <h5 class="card-title fw-bold">{{ service.name }}</h5>
+
+                        <p class="card-text small text-muted">
+                            {# ICT Services #}
+                            {% if 'Issuances' in service.name %} For memos, advisories, and other materials.
+                            {% elif 'Repair' in service.name %} Request for IT equipment troubleshooting.
+                            {% elif 'Email' in service.name %} Create or reset DepEd email accounts.
+                            {% elif 'DPDS' in service.name %} Password reset for the partnership database.
+                            {% elif 'DCP' in service.name %} For after-sales and program concerns.
+
+                            {# Personnel Services #}
+                            {% elif 'Leave' in service.name %} File for a leave of absence.
+                            {% elif 'Employment' in service.name %} Request for a certificate of employment.
+                            {% elif 'Service Record' in service.name %} Get your official service record.
+                            {% elif 'GSIS' in service.name %} Create or update your GSIS BP Number.
+
+                            {# Legal Services #}
+                            {% elif 'Pending Case' in service.name %} Certify that you have no pending cases.
+
+                            {# Office of the SDS Services #}
+                            {% elif 'Locator Slip' in service.name %} For approval of your locator slip.
+                            {% elif 'Travel' in service.name %} For approval of your authority to travel.
+                            {% elif 'Officer-in-Charge' in service.name %} Request for OIC designation.
+                            {% elif 'Substitute Teacher' in service.name %} Request for a substitute teacher.
+                            {% elif 'Alternative Delivery' in service.name %} For ADM implementation requests.
+                            
+                            {# Accounting Unit Services #}
+                            {% elif 'Provident' in service.name %} Apply for or manage your Provident Fund loan.
+
+                            {# Supply Office Services #}
+                            {% elif 'Inventory' in service.name %} Submit your Inventory Custodian Slip (ICS).
+
+                            {# Fallback Description #}
+                            {% else %} For other technical assistance needs. {% endif %}
+                        </p>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
+        {% endfor %}
+    </div>
+
+    <div class="text-center mt-5">
+        <a href="{{ url_for('select_department') }}" class="btn btn-outline-secondary">← Back to Departments</a>
     </div>
 </div>
+
+<style>
+    .card-hover {
+        transition: transform .2s ease-in-out, box-shadow .2s ease-in-out;
+    }
+    .card-hover:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 0.8rem 1.5rem rgba(0, 0, 0, 0.1) !important;
+    }
+</style>
 {% endblock content %}

@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container">
+
+    <div class="text-center pt-4 pb-5"> <img src="https://depedtarlaccity.com/wp-content/uploads/2025/02/logo_TCSD_header.png" 
+             alt="Tarlac City Schools Division Logo" 
+             class="img-fluid mb-3" 
+             style="max-height: 80px;"> <h1 class="display-5 fw-bold">TCSD e-Services Portal</h1> <p class="lead text-muted">Please select the department you wish to transact with.</p>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+        {% for dept in departments %}
+        <div class="col-md-6 col-lg-4">
+            <a href="{{ url_for('select_service', department_id=dept.id) }}" class="text-decoration-none text-dark">
+                <div class="card h-100 shadow-sm text-center p-4 border-0 rounded-4 card-hover">
+                    <div class="card-body">
+                        
+                        <i class="
+                            {% if 'ICT' in dept.name %} bi-pc-display-horizontal
+                            {% elif 'Personnel' in dept.name %} bi-people
+                            {% elif 'Legal' in dept.name %} bi-briefcase
+                            {% elif 'SDS' in dept.name %} bi-building
+                            {% elif 'Accounting' in dept.name %} bi-calculator
+                            {% elif 'Supply' in dept.name %} bi-box-seam
+                            {% else %} bi-grid {% endif %}
+                            display-4 text-primary mb-3"></i>
+
+                        <h5 class="card-title fw-bold">{{ dept.name }}</h5>
+                        <p class="card-text small text-muted">
+                            {% if 'ICT' in dept.name %} Technical support, email, and systems.
+                            {% elif 'Personnel' in dept.name %} Leave, employment certs, records, and GSIS BP Number.
+                            {% elif 'Legal' in dept.name %} No-pending case certifications.
+                            {% elif 'SDS' in dept.name %} Approvals, travel, and designations.
+                            {% elif 'Accounting' in dept.name %} Provident fund and financial matters.
+                            {% elif 'Supply' in dept.name %} Inventory and custodian slips.
+                            {% else %} Click to see services. {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .card-hover {
+        transition: transform .2s ease-in-out, box-shadow .2s ease-in-out;
+    }
+    .card-hover:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 0.8rem 1.5rem rgba(0, 0, 0, 0.1) !important;
+    }
+</style>
+{% endblock content %}
