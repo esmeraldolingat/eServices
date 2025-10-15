@@ -1,11 +1,22 @@
 # forms.py
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, SubmitField, PasswordField, TextAreaField, DateField
-from wtforms.validators import DataRequired, Email, Length, Optional
+from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, EqualTo
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from sqlalchemy import case
 
-from models import School
+# Import all necessary models
+from models import School, AuthorizedEmail, User
+
+# ======================================================
+# === CUSTOM VALIDATOR =================================
+# ======================================================
+
+def is_authorized_email(form, field):
+    """Checks if the submitted email exists in the AuthorizedEmail table."""
+    email_exists = AuthorizedEmail.query.filter_by(email=field.data).first()
+    if not email_exists:
+        raise ValidationError('This email address is not authorized to submit requests.')
 
 # ======================================================
 # === BASE & LOGIN FORMS ===============================
@@ -20,14 +31,14 @@ class ServiceSelectionForm(FlaskForm):
     submit = SubmitField('Next')
 
 class LoginForm(FlaskForm):
-    username = StringField('Username', validators=[DataRequired()])
+    username = StringField('DepEd Email Address', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
 
 class GeneralTicketForm(FlaskForm):
     """Base form with common requester info."""
     requester_name = StringField('Full Name', validators=[DataRequired(), Length(min=2, max=100)])
-    requester_email = StringField('DepEd Email Address', validators=[DataRequired(), Email()])
+    requester_email = StringField('DepEd Email Address', validators=[DataRequired(), Email(), is_authorized_email])
     requester_contact = StringField('Contact Number', validators=[DataRequired(), Length(min=7, max=15)])
     school = SelectField('School / Office', coerce=int, validators=[DataRequired()])
     submit = SubmitField('Submit Ticket')
@@ -89,7 +100,6 @@ class LeaveApplicationForm(GeneralTicketForm):
     supporting_docs_attachment = FileField('Please upload any supporting documents, if any (PDF Only, max 25MB)', validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
 
 class CoeForm(GeneralTicketForm):
-    """Certificate of Employment"""
     first_day_of_service = DateField('1st Day of Service', format='%Y-%m-%d', validators=[DataRequired()])
     basic_salary = StringField('Basic Salary', validators=[DataRequired()])
     position = StringField('Position / Designation', validators=[DataRequired()])
@@ -108,7 +118,6 @@ class ServiceRecordForm(GeneralTicketForm):
     delivery_method = SelectField('How would you like to receive your service record?', choices=[('', '-- Select a method --'), ('Hard copy (printed)', 'Hard copy (printed)'), ('Soft copy (digital/PDF)', 'Soft copy (digital/PDF)')], validators=[DataRequired()])
 
 class GsisForm(GeneralTicketForm):
-    """GSIS BP Number"""
     address_street = StringField('Street/ Barangay/ Village (CAPSLOCK)', validators=[DataRequired()])
     address_city = StringField('Municipality/ City/ Province (CAPSLOCK)', validators=[DataRequired()])
     postal_code = StringField('Postal Code', validators=[DataRequired()])
@@ -132,7 +141,6 @@ class GsisForm(GeneralTicketForm):
 # ======================================================
 
 class NoPendingCaseForm(GeneralTicketForm):
-    """Certificate of No Pending Case"""
     position = StringField('Position / Designation', validators=[DataRequired()])
     purpose = TextAreaField('Purpose of Request', validators=[DataRequired()])
     attachment = FileField('Please attach a scanned copy of the appointment or a DepEd ID (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
@@ -158,7 +166,6 @@ class SubstituteTeacherForm(GeneralTicketForm):
     attachment = FileField('Please attach a copy of your request for a Substitute Teacher (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
 
 class AdmForm(GeneralTicketForm):
-    """Alternative Delivery Mode"""
     position = StringField('Position / Designation', validators=[DataRequired()])
     attachment = FileField('Please attach a copy of your request for Alternative Delivery Mode (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
 
@@ -166,66 +173,74 @@ class AdmForm(GeneralTicketForm):
 # === ACCOUNTING UNIT FORMS ============================
 # ======================================================
 
-# Inside forms.py
-
 class ProvidentFundForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])
     employee_number = StringField('Employee Number', validators=[DataRequired()])
     station_no = StringField('Station No.', validators=[DataRequired()])
-    query = SelectField('Query', choices=[
-        ('', '-- Select your Query --'),
-        ('Application for a Provident Loan (1st time Borrower)', 'Application for a Provident Loan (1st time Borrower)'),
-        ('Application for a Provident Loan (10K-100K) - old applicant', 'Application for a Provident Loan (10K-100K) - old applicant'),
-        ('Application for a Provident Loan (Additional 100K)', 'Application for a Provident Loan (Additional 100K)'),
-        ('Status of Application', 'Status of Application'),
-        ('Statement of Account', 'Statement of Account'),
-        ('Request for Provident Loan Accountability Clearance', 'Request for Provident Loan Accountability Clearance')
-    ], validators=[DataRequired()])
-
-    # --- Define the detailed labels first for clarity ---
+    query = SelectField('Query', choices=[('', '-- Select your Query --'), ('Application for a Provident Loan (1st time Borrower)', 'Application for a Provident Loan (1st time Borrower)'), ('Application for a Provident Loan (10K-100K) - old applicant', 'Application for a Provident Loan (10K-100K) - old applicant'), ('Application for a Provident Loan (Additional 100K)', 'Application for a Provident Loan (Additional 100K)'), ('Status of Application', 'Status of Application'), ('Statement of Account', 'Statement of Account'), ('Request for Provident Loan Accountability Clearance', 'Request for Provident Loan Accountability Clearance')], validators=[DataRequired()])
     LABEL_FIRST_TIME = """For employment verification, please attach scanned copies of the following documents (1 file only):
-    1. Provident Fund Form (front and back)
-    2. Deduction Authorization Letter
-    3. Your LATEST payslip and your co-maker's LATEST payslip
-    4. Your valid ID and your co-maker's valid ID, both with facsimile signatures
-    5. Approved Appointment"""
-    
+1. Provident Fund Form (front and back)
+2. Deduction Authorization Letter
+3. Your LATEST payslip and your co-maker's LATEST payslip
+4. Your valid ID and your co-maker's valid ID, both with facsimile signatures
+5. Approved Appointment"""
     LABEL_OLD_APPLICANT = """For employment verification, please attach scanned copies of the following documents (1 file only):
-    1. Provident Fund Form (front and back)
-    2. Deduction Authorization Letter
-    3. Your LATEST payslip and your co-maker's LATEST payslip
-    4. Your valid ID and your co-maker's valid ID, both with facsimile signatures"""
-
+1. Provident Fund Form (front and back)
+2. Deduction Authorization Letter
+3. Your LATEST payslip and your co-maker's LATEST payslip
+4. Your valid ID and your co-maker's valid ID, both with facsimile signatures"""
     LABEL_ADDITIONAL = """For employment verification, please attach scanned copies of the following documents (1 file only):
-    1. Provident Fund Form (front and back)
-    2. Deduction Authorization Letter
-    3. Your LATEST payslip and your co-maker's LATEST payslip
-    4. Your valid ID and your co-maker's valid ID, both with facsimile signatures
-    5. Request Letter
-    6. Hospital Bill/ Death Certificate etc."""
-
+1. Provident Fund Form (front and back)
+2. Deduction Authorization Letter
+3. Your LATEST payslip and your co-maker's LATEST payslip
+4. Your valid ID and your co-maker's valid ID, both with facsimile signatures
+5. Request Letter
+6. Hospital Bill/ Death Certificate etc."""
     LABEL_STATUS = "For employment verification, please attach scanned copy of your PRC ID/ Appointment or any valid documents in PDF format."
     LABEL_STATEMENT = "For employment verification, please attach scanned copy of your Intent to Resign Letter/ Retirement Notification Letter/ Letter of Intent to Travel Abroad etc."
     LABEL_CLEARANCE = "For employment verification, please attach scanned copy of your PRC ID/ Appointment or any valid documents in PDF format."
-
-    # --- Use the detailed labels in the FileFields ---
     attachment_first_time = FileField(LABEL_FIRST_TIME, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
     attachment_old_applicant = FileField(LABEL_OLD_APPLICANT, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
     attachment_additional = FileField(LABEL_ADDITIONAL, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
     attachment_status = FileField(LABEL_STATUS, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
     attachment_statement = FileField(LABEL_STATEMENT, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
     attachment_clearance = FileField(LABEL_CLEARANCE, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
-    
-    
 
 # ======================================================
 # === SUPPLY OFFICE FORMS ==============================
 # ======================================================
 
 class IcsForm(GeneralTicketForm):
-    """Inventory Custodian Slip"""
     position = StringField('Position / Designation', validators=[DataRequired()])
-    attachment = FileField('Please attach a copy of your Inventory Custodian Sheet - ICS in PDF format', validators=[
-        FileRequired(),
-        FileAllowed(['pdf'], 'PDF documents only!')
-    ])
+    attachment = FileField('Please attach a copy of your Inventory Custodian Sheet - ICS in PDF format', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
+
+# ======================================================
+# === REGISTRATION & PASSWORD RESET FORMS ==============
+# ======================================================
+
+class RegistrationForm(FlaskForm):
+    name = StringField('Full Name', validators=[DataRequired(), Length(min=2, max=100)])
+    email = StringField('DepEd Email Address', validators=[DataRequired(), Email(), is_authorized_email])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Sign Up')
+
+    def validate_email(self, email):
+        """Checks if the email is already registered."""
+        user = User.query.filter_by(email=email.data).first()
+        if user:
+            raise ValidationError('That email is already registered. Please log in.')
+
+class RequestResetForm(FlaskForm):
+    email = StringField('DepEd Email Address', validators=[DataRequired(), Email()])
+    submit = SubmitField('Request Password Reset')
+
+    def validate_email(self, email):
+        user = User.query.filter_by(email=email.data).first()
+        if user is None:
+            raise ValidationError('There is no account with that email. You must register first.')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField('Confirm New Password', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Reset Password')
