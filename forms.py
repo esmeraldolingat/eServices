@@ -136,3 +136,96 @@ class NoPendingCaseForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])
     purpose = TextAreaField('Purpose of Request', validators=[DataRequired()])
     attachment = FileField('Please attach a scanned copy of the appointment or a DepEd ID (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
+
+# ======================================================
+# === OFFICE OF THE SDS FORMS ==========================
+# ======================================================
+
+class LocatorSlipForm(GeneralTicketForm):
+    position = StringField('Position / Designation', validators=[DataRequired()])
+    attachment = FileField('Please attach a copy of your request for a Locator Slip (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
+
+class AuthorityToTravelForm(GeneralTicketForm):
+    position = StringField('Position / Designation', validators=[DataRequired()])
+    attachment = FileField('Please attach a copy of your request for Authority to Travel (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
+
+class OicDesignationForm(GeneralTicketForm):
+    position = StringField('Position / Designation', validators=[DataRequired()])
+    attachment = FileField('Please attach a copy of your request for OIC Designation (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
+
+class SubstituteTeacherForm(GeneralTicketForm):
+    position = StringField('Position / Designation', validators=[DataRequired()])
+    attachment = FileField('Please attach a copy of your request for a Substitute Teacher (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
+
+class AdmForm(GeneralTicketForm):
+    """Alternative Delivery Mode"""
+    position = StringField('Position / Designation', validators=[DataRequired()])
+    attachment = FileField('Please attach a copy of your request for Alternative Delivery Mode (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
+
+# ======================================================
+# === ACCOUNTING UNIT FORMS ============================
+# ======================================================
+
+# Inside forms.py
+
+class ProvidentFundForm(GeneralTicketForm):
+    position = StringField('Position / Designation', validators=[DataRequired()])
+    employee_number = StringField('Employee Number', validators=[DataRequired()])
+    station_no = StringField('Station No.', validators=[DataRequired()])
+    query = SelectField('Query', choices=[
+        ('', '-- Select your Query --'),
+        ('Application for a Provident Loan (1st time Borrower)', 'Application for a Provident Loan (1st time Borrower)'),
+        ('Application for a Provident Loan (10K-100K) - old applicant', 'Application for a Provident Loan (10K-100K) - old applicant'),
+        ('Application for a Provident Loan (Additional 100K)', 'Application for a Provident Loan (Additional 100K)'),
+        ('Status of Application', 'Status of Application'),
+        ('Statement of Account', 'Statement of Account'),
+        ('Request for Provident Loan Accountability Clearance', 'Request for Provident Loan Accountability Clearance')
+    ], validators=[DataRequired()])
+
+    # --- Define the detailed labels first for clarity ---
+    LABEL_FIRST_TIME = """For employment verification, please attach scanned copies of the following documents (1 file only):
+    1. Provident Fund Form (front and back)
+    2. Deduction Authorization Letter
+    3. Your LATEST payslip and your co-maker's LATEST payslip
+    4. Your valid ID and your co-maker's valid ID, both with facsimile signatures
+    5. Approved Appointment"""
+    
+    LABEL_OLD_APPLICANT = """For employment verification, please attach scanned copies of the following documents (1 file only):
+    1. Provident Fund Form (front and back)
+    2. Deduction Authorization Letter
+    3. Your LATEST payslip and your co-maker's LATEST payslip
+    4. Your valid ID and your co-maker's valid ID, both with facsimile signatures"""
+
+    LABEL_ADDITIONAL = """For employment verification, please attach scanned copies of the following documents (1 file only):
+    1. Provident Fund Form (front and back)
+    2. Deduction Authorization Letter
+    3. Your LATEST payslip and your co-maker's LATEST payslip
+    4. Your valid ID and your co-maker's valid ID, both with facsimile signatures
+    5. Request Letter
+    6. Hospital Bill/ Death Certificate etc."""
+
+    LABEL_STATUS = "For employment verification, please attach scanned copy of your PRC ID/ Appointment or any valid documents in PDF format."
+    LABEL_STATEMENT = "For employment verification, please attach scanned copy of your Intent to Resign Letter/ Retirement Notification Letter/ Letter of Intent to Travel Abroad etc."
+    LABEL_CLEARANCE = "For employment verification, please attach scanned copy of your PRC ID/ Appointment or any valid documents in PDF format."
+
+    # --- Use the detailed labels in the FileFields ---
+    attachment_first_time = FileField(LABEL_FIRST_TIME, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
+    attachment_old_applicant = FileField(LABEL_OLD_APPLICANT, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
+    attachment_additional = FileField(LABEL_ADDITIONAL, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
+    attachment_status = FileField(LABEL_STATUS, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
+    attachment_statement = FileField(LABEL_STATEMENT, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
+    attachment_clearance = FileField(LABEL_CLEARANCE, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
+    
+    
+
+# ======================================================
+# === SUPPLY OFFICE FORMS ==============================
+# ======================================================
+
+class IcsForm(GeneralTicketForm):
+    """Inventory Custodian Slip"""
+    position = StringField('Position / Designation', validators=[DataRequired()])
+    attachment = FileField('Please attach a copy of your Inventory Custodian Sheet - ICS in PDF format', validators=[
+        FileRequired(),
+        FileAllowed(['pdf'], 'PDF documents only!')
+    ])

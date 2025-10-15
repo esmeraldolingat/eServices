@@ -12,7 +12,9 @@ from models import db, User, Department, Service, School, Ticket, Attachment, Re
 from forms import (
     DepartmentSelectionForm, ServiceSelectionForm, GeneralTicketForm, LoginForm,
     IssuanceForm, RepairForm, EmailAccountForm, DpdsForm, DcpForm, OtherIctForm,
-    LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm
+    LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm,
+    LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
+    ProvidentFundForm, IcsForm
 )
 
 # --- App Initialization and Config ---
@@ -49,12 +51,14 @@ def load_user(user_id):
 @app.route('/')
 @login_required
 def home():
+    """Main dashboard view."""
     tickets = Ticket.query.order_by(Ticket.date_posted.desc()).all()
     return render_template('dashboard.html', tickets=tickets)
 
 @app.route('/ticket/<int:ticket_id>')
 @login_required
 def ticket_detail(ticket_id):
+    """View details of a single ticket."""
     ticket = db.session.get(Ticket, ticket_id)
     if not ticket:
         flash('Ticket not found!', 'error')
@@ -90,12 +94,25 @@ def create_ticket_form(service_id):
         return redirect(url_for('select_department'))
 
     form_map = {
+        # ICT Forms
         'Issuances and Online Materials': IssuanceForm, 'Repair, Maintenance and Troubleshoot of IT Equipment': RepairForm,
         'DepEd Email Account': EmailAccountForm, 'DPDS - DepEd Partnership Database System': DpdsForm,
         'DCP - DepEd Computerization Program: After-sales': DcpForm, 'other ICT - Technical Assistance Needed': OtherIctForm,
+        # Personnel Forms
         'Application for Leave of Absence': LeaveApplicationForm, 'Certificate of Employment': CoeForm,
         'Service Record': ServiceRecordForm, 'GSIS BP Number': GsisForm,
+        # Legal Services Form
         'Certificate of NO-Pending Case': NoPendingCaseForm,
+        # Office of the SDS Forms
+        'Request for Approval of Locator Slip': LocatorSlipForm,
+        'Request for Approval of Authority to Travel': AuthorityToTravelForm,
+        'Request for Designation of Officer-in-Charge at the School': OicDesignationForm,
+        'Request for Substitute Teacher': SubstituteTeacherForm,
+        'Alternative Delivery Mode': AdmForm,
+        # Accounting Unit Form
+        'DepEd TCSD Provident Fund': ProvidentFundForm,
+        # Supply Office Form
+        'Submission of Inventory Custodian Slip – ICS': IcsForm,
     }
     FormClass = form_map.get(service.name, GeneralTicketForm)
     form = FormClass()

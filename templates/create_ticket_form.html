@@ -27,7 +27,15 @@
                                 {% for field in form %}
                                     {% if field.name not in ['requester_name', 'requester_email', 'requester_contact', 'school', 'csrf_token', 'submit'] %}
                                         <div class="form-group mb-3" id="div_{{ field.name }}">
-                                            {{ field.label(class="form-control-label") }}
+                                            
+                                            {% if '\n' in field.label.text %}
+                                                {# If the label text has line breaks, render it with a special style #}
+                                                {{ field.label(class="form-control-label", style="white-space: pre-line;") }}
+                                            {% else %}
+                                                {# Otherwise, render it normally #}
+                                                {{ field.label(class="form-control-label") }}
+                                            {% endif %}
+                                            
                                             {% if field.type == 'FileField' %}
                                                 {{ field(class="form-control", accept=".pdf") }}
                                             {% else %}
@@ -39,6 +47,7 @@
                                         </div>
                                     {% endif %}
                                 {% endfor %}
+
                             </fieldset>
                         </div>
                         
@@ -73,7 +82,7 @@
             selectElement.addEventListener('change', toggle);
         }
 
-        // --- Logic for COE Remarks (unchanged) ---
+        // --- Logic for COE Remarks ---
         const coeRemarksSelect = document.querySelector('select[name="remarks"]');
         if (coeRemarksSelect) {
             const withCompFields = ['div_first_day_cert_attachment', 'div_coe_wo_comp_attachment'];
@@ -94,7 +103,7 @@
             coeRemarksSelect.addEventListener('change', toggleCoeFields);
         }
 
-        // --- NEW: Logic for GSIS "Previous Appointment" ---
+        // --- Logic for GSIS "Previous Appointment" ---
         const prevAppointmentSelect = document.querySelector('select[name="previous_appointment"]');
         if (prevAppointmentSelect) {
             const agencyFieldDiv = document.getElementById('div_previous_agency');
@@ -104,8 +113,38 @@
                     agencyFieldDiv.style.display = (prevAppointmentSelect.value === 'Yes') ? 'block' : 'none';
                 }
             }
-            toggleAgencyField(); // Run on page load
+            toggleAgencyField();
             prevAppointmentSelect.addEventListener('change', toggleAgencyField);
+        }
+        
+        // --- Logic for Provident Fund Query ---
+        const providentQuerySelect = document.querySelector('select[name="query"]');
+        if (providentQuerySelect) {
+            const fieldMap = {
+                'Application for a Provident Loan (1st time Borrower)': 'div_attachment_first_time',
+                'Application for a Provident Loan (10K-100K) - old applicant': 'div_attachment_old_applicant',
+                'Application for a Provident Loan (Additional 100K)': 'div_attachment_additional',
+                'Status of Application': 'div_attachment_status',
+                'Statement of Account': 'div_attachment_statement',
+                'Request for Provident Loan Accountability Clearance': 'div_attachment_clearance'
+            };
+            
+            const allAttachmentDivs = Object.values(fieldMap).map(id => document.getElementById(id)).filter(Boolean);
+
+            function toggleProvidentFields() {
+                const selectedValue = providentQuerySelect.value;
+                allAttachmentDivs.forEach(div => div.style.display = 'none');
+                
+                const divToShowId = fieldMap[selectedValue];
+                if (divToShowId) {
+                    const divToShow = document.getElementById(divToShowId);
+                    if (divToShow) {
+                        divToShow.style.display = 'block';
+                    }
+                }
+            }
+            toggleProvidentFields();
+            providentQuerySelect.addEventListener('change', toggleProvidentFields);
         }
     });
 </script>
