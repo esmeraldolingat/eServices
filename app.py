@@ -21,7 +21,7 @@ from forms import (
 # --- App Initialization and Config ---
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SECRET_KEY'] = 'a-really-long-and-secret-string-nobody-can-guess'
+app.secret_key = 'a-really-long-and-secret-string-nobody-can-guess'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 instance_path = os.path.join(basedir, 'instance')
 os.makedirs(instance_path, exist_ok=True)
@@ -35,8 +35,11 @@ app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'your-email@gmail.com' # PALITAN MO ITO
-app.config['MAIL_PASSWORD'] = 'your-google-app-password' # PALITAN MO ITO
+app.config['MAIL_USERNAME'] = 'admin@deped.gov.ph' # PALITAN MO ITO
+app.config['MAIL_PASSWORD'] = '1234567890123456' # PALITAN MO ITO
+
+
+
 
 # --- Extensions ---
 db.init_app(app)

@@ -1,5 +1,6 @@
 # models.py
-from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+# --- BINAGO ANG IMPORT DITO ---
+from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
@@ -19,18 +20,24 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), nullable=False, default='User')
     responses = db.relationship('Response', backref='author', lazy=True)
 
-    def get_reset_token(self, expires_sec=1800):
-        s = Serializer(current_app.config['SECRET_KEY'], expires_sec)
-        return s.dumps({'user_id': self.id}).decode('utf-8')
+    # --- BINAGO ANG TOKEN METHODS DITO PARA SA BAGONG VERSION NG LIBRARY ---
+    def get_reset_token(self):
+        s = Serializer(current_app.config['SECRET_KEY'])
+        return s.dumps(self.id, salt='password-reset-salt')
 
     @staticmethod
-    def verify_reset_token(token):
+    def verify_reset_token(token, expires_sec=1800):
         s = Serializer(current_app.config['SECRET_KEY'])
         try:
-            user_id = s.loads(token)['user_id']
+            user_id = s.loads(
+                token,
+                salt='password-reset-salt',
+                max_age=expires_sec
+            )
         except:
             return None
         return db.session.get(User, user_id)
+    # --- HANGGANG DITO ANG PAGBABAGO ---
 
     def __repr__(self):
         return f"User('{self.name}', '{self.email}', '{self.role}')"
