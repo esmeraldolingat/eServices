@@ -1,5 +1,4 @@
 # models.py
-# --- BINAGO ANG IMPORT DITO ---
 from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
@@ -9,6 +8,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 # Initialize the database object here, without the app
 db = SQLAlchemy()
+
+# --- ITO ANG BAGONG ASSOCIATION TABLE ---
+# Association Table for User <-> Service many-to-many relationship
+user_service_association = db.Table('user_service',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
+    db.Column('service_id', db.Integer, db.ForeignKey('service.id'), primary_key=True)
+)
+# --- HANGGANG DITO ---
 
 # --- Model Classes ---
 
@@ -20,7 +27,12 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), nullable=False, default='User')
     responses = db.relationship('Response', backref='author', lazy=True)
 
-    # --- BINAGO ANG TOKEN METHODS DITO PARA SA BAGONG VERSION NG LIBRARY ---
+    # --- ITO ANG BAGONG RELATIONSHIP ---
+    managed_services = db.relationship('Service', secondary=user_service_association,
+                                       backref=db.backref('managers', lazy='dynamic'),
+                                       lazy='dynamic')
+    # --- HANGGANG DITO ---
+
     def get_reset_token(self):
         s = Serializer(current_app.config['SECRET_KEY'])
         return s.dumps(self.id, salt='password-reset-salt')
@@ -37,7 +49,6 @@ class User(db.Model, UserMixin):
         except:
             return None
         return db.session.get(User, user_id)
-    # --- HANGGANG DITO ANG PAGBABAGO ---
 
     def __repr__(self):
         return f"User('{self.name}', '{self.email}', '{self.role}')"
@@ -48,7 +59,7 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-
+# (Ang iba pang model classes tulad ng Department, Service, atbp. ay mananatiling pareho)
 class Department(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -59,7 +70,6 @@ class Department(db.Model):
     def __repr__(self):
         return f"Department('{self.name}')"
 
-
 class Service(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
@@ -69,7 +79,6 @@ class Service(db.Model):
     def __repr__(self):
         return f"Service('{self.name}')"
 
-
 class School(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), unique=True, nullable=False)
@@ -78,7 +87,6 @@ class School(db.Model):
 
     def __repr__(self):
         return f"School('{self.name}')"
-
 
 class Ticket(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -98,7 +106,6 @@ class Ticket(db.Model):
     def __repr__(self):
         return f"Ticket('{self.ticket_number}', Status: '{self.status}')"
 
-
 class Attachment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(200), nullable=False)
@@ -106,7 +113,6 @@ class Attachment(db.Model):
 
     def __repr__(self):
         return f"Attachment('{self.filename}')"
-
 
 class Response(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -118,7 +124,6 @@ class Response(db.Model):
     def __repr__(self):
         return f"Response on Ticket {self.ticket_id}"
 
-
 class CannedResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
@@ -127,7 +132,6 @@ class CannedResponse(db.Model):
 
     def __repr__(self):
         return f"CannedResponse('{self.title}')"
-
 
 class AuthorizedEmail(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -8,8 +8,11 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.utils import secure_filename
 from flask_mail import Mail, Message
 from functools import wraps
-import csv # <--- BAGONG IMPORT
-import io  # <--- BAGONG IMPORT
+import csv
+import io
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- IMPORTS FROM OUR PROJECT FILES ---
 from models import db, User, Department, Service, School, Ticket, Attachment, Response, CannedResponse, AuthorizedEmail
@@ -19,17 +22,22 @@ from forms import (
     LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm,
     LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
-    ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm # <--- BAGONG IMPORT
+    ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm
 )
 
 # --- App Initialization and Config ---
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.secret_key = 'a-really-long-and-secret-string-nobody-can-guess'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+app.secret_key = os.getenv('SECRET_KEY')
+
 instance_path = os.path.join(basedir, 'instance')
 os.makedirs(instance_path, exist_ok=True)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(instance_path, 'eservices.db')
+db_filename = os.getenv('DATABASE_FILENAME', 'eservices.db')
+db_path = os.path.join(instance_path, db_filename)
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -39,8 +47,8 @@ app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'your-email@gmail.com' # PALITAN MO ITO
-app.config['MAIL_PASSWORD'] = 'your-google-app-password' # PALITAN MO ITO
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 
 # --- Extensions ---
 db.init_app(app)
@@ -134,8 +142,30 @@ def create_admin():
 @app.route('/')
 @login_required
 def home():
-    tickets = Ticket.query.order_by(Ticket.date_posted.desc()).all()
-    return render_template('dashboard.html', tickets=tickets)
+    """Redirects user to the appropriate dashboard based on their role and permissions."""
+    if current_user.role == 'Admin' or current_user.managed_services.count() > 0:
+        return redirect(url_for('staff_dashboard'))
+    else:
+        return redirect(url_for('my_tickets'))
+
+@app.route('/staff-dashboard')
+@login_required
+def staff_dashboard():
+    """Shows tickets for services managed by the current staff user."""
+    managed_service_ids = [service.id for service in current_user.managed_services]
+
+    if current_user.role == 'Admin':
+        tickets = Ticket.query.order_by(Ticket.date_posted.desc()).all()
+        title = "All System Tickets"
+    elif managed_service_ids:
+        tickets = Ticket.query.filter(Ticket.service_id.in_(managed_service_ids)).order_by(Ticket.date_posted.desc()).all()
+        title = "My Managed Tickets"
+    else:
+        tickets = []
+        title = "My Managed Tickets"
+        flash("You are not assigned to manage any services.", "info")
+
+    return render_template('staff_dashboard.html', tickets=tickets, title=title)
 
 @app.route('/my-tickets')
 @login_required
@@ -187,19 +217,24 @@ def edit_user(user_id):
     if not user:
         flash('User not found.', 'danger')
         return redirect(url_for('manage_users'))
-    form = EditUserForm()
+    form = EditUserForm(obj=user)
     if form.validate_on_submit():
         user.name = form.name.data
         user.email = form.email.data
         user.role = form.role.data
+        user.managed_services = []
+        selected_service_ids = request.form.getlist('managed_services')
+        for service_id in selected_service_ids:
+            service = db.session.get(Service, int(service_id))
+            if service:
+                user.managed_services.append(service)
         db.session.commit()
         flash(f'User {user.name} has been updated successfully!', 'success')
         return redirect(url_for('manage_users'))
-    elif request.method == 'GET':
-        form.name.data = user.name
-        form.email.data = user.email
-        form.role.data = user.role
-    return render_template('admin/edit_user.html', form=form, user=user, title='Edit User')
+
+    departments = Department.query.order_by(Department.name).all()
+    managed_service_ids = {service.id for service in user.managed_services}
+    return render_template('admin/edit_user.html', form=form, user=user, departments=departments, managed_service_ids=managed_service_ids, title='Edit User')
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
 @login_required
@@ -217,52 +252,36 @@ def delete_user(user_id):
         flash('User not found.', 'danger')
     return redirect(url_for('manage_users'))
 
-# --- PALITAN ANG BUONG `manage_authorized_emails` FUNCTION NG NASA BABA ---
 @app.route('/admin/authorized-emails', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def manage_authorized_emails():
     add_form = AddAuthorizedEmailForm()
     bulk_form = BulkUploadForm()
-
-    # Logic para sa single email add form
     if add_form.validate_on_submit() and add_form.submit.data:
         new_email = AuthorizedEmail(email=add_form.email.data)
         db.session.add(new_email)
         db.session.commit()
         flash(f'Email {add_form.email.data} has been authorized.', 'success')
         return redirect(url_for('manage_authorized_emails'))
-
-    # Logic para sa bulk upload CSV form
     if bulk_form.validate_on_submit() and bulk_form.submit_bulk.data:
         csv_file = bulk_form.csv_file.data
         stream = io.StringIO(csv_file.read().decode("UTF8"), newline=None)
         csv_reader = csv.reader(stream)
-        
-        added_count = 0
-        duplicate_count = 0
-        
+        added_count, duplicate_count = 0, 0
         for row in csv_reader:
-            if row: # Siguraduhing hindi blangko ang row
+            if row and row[0].strip():
                 email = row[0].strip()
-                if email: # Siguraduhing may email sa row
-                    existing = AuthorizedEmail.query.filter_by(email=email).first()
-                    if not existing:
-                        new_email = AuthorizedEmail(email=email)
-                        db.session.add(new_email)
-                        added_count += 1
-                    else:
-                        duplicate_count += 1
-        
-        if added_count > 0:
-            db.session.commit()
-
+                if not AuthorizedEmail.query.filter_by(email=email).first():
+                    db.session.add(AuthorizedEmail(email=email))
+                    added_count += 1
+                else:
+                    duplicate_count += 1
+        if added_count > 0: db.session.commit()
         flash(f'Bulk upload complete. Added: {added_count} new emails. Duplicates skipped: {duplicate_count}.', 'info')
         return redirect(url_for('manage_authorized_emails'))
-
     emails = AuthorizedEmail.query.order_by(AuthorizedEmail.email).all()
     return render_template('admin/authorized_emails.html', emails=emails, add_form=add_form, bulk_form=bulk_form, title='Manage Authorized Emails')
-
 
 @app.route('/admin/authorized-emails/<int:email_id>/delete', methods=['POST'])
 @login_required
@@ -276,6 +295,62 @@ def delete_authorized_email(email_id):
     else:
         flash('Email not found.', 'danger')
     return redirect(url_for('manage_authorized_emails'))
+
+@app.route('/admin/departments')
+@login_required
+@admin_required
+def manage_departments():
+    departments = Department.query.order_by(Department.name).all()
+    return render_template('admin/departments.html', departments=departments, title='Manage Departments')
+
+@app.route('/admin/department/add', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def add_department():
+    form = DepartmentForm()
+    if form.validate_on_submit():
+        new_dept = Department(name=form.name.data)
+        db.session.add(new_dept)
+        db.session.commit()
+        flash(f'Department "{form.name.data}" has been created.', 'success')
+        return redirect(url_for('manage_departments'))
+    return render_template('admin/add_edit_department.html', form=form, title='Add Department')
+
+@app.route('/admin/department/<int:dept_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_department(dept_id):
+    dept = db.session.get(Department, dept_id)
+    if not dept:
+        flash('Department not found.', 'danger')
+        return redirect(url_for('manage_departments'))
+    form = DepartmentForm(obj=dept)
+    if form.validate_on_submit():
+        existing_dept = Department.query.filter(Department.name == form.name.data, Department.id != dept_id).first()
+        if existing_dept:
+            flash('That department name already exists.', 'danger')
+        else:
+            dept.name = form.name.data
+            db.session.commit()
+            flash(f'Department has been updated to "{form.name.data}".', 'success')
+            return redirect(url_for('manage_departments'))
+    return render_template('admin/add_edit_department.html', form=form, title='Edit Department', department=dept)
+
+@app.route('/admin/department/<int:dept_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_department(dept_id):
+    dept_to_delete = db.session.get(Department, dept_id)
+    if dept_to_delete:
+        if dept_to_delete.tickets:
+            flash(f'Cannot delete department "{dept_to_delete.name}" because it has existing tickets.', 'danger')
+            return redirect(url_for('manage_departments'))
+        db.session.delete(dept_to_delete)
+        db.session.commit()
+        flash(f'Department "{dept_to_delete.name}" has been deleted.', 'success')
+    else:
+        flash('Department not found.', 'danger')
+    return redirect(url_for('manage_departments'))
 
 # =================================================================
 # === TICKET CREATION FLOW ========================================

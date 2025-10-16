@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ title }}</h1>
+        <a href="{{ url_for('select_department') }}" class="btn btn-primary">Create New Ticket</a>
+    </div>
+
+    {% if tickets %}
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Ticket #</th>
+                    <th scope="col">Requester</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Service</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Date Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ticket in tickets %}
+                <tr>
+                    <td><a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a></td>
+                    <td>{{ ticket.requester_name }}</td>
+                    <td>{{ ticket.ticket_department.name }}</td>
+                    <td>{{ ticket.service_type.name }}</td>
+                    <td>
+                        {% if ticket.status == 'Open' %}
+                            <span class="badge bg-success">{{ ticket.status }}</span>
+                        {% elif ticket.status == 'In Progress' %}
+                            <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ ticket.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ ticket.date_posted.strftime('%Y-%m-%d %H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="alert alert-info" role="alert">
+            There are no tickets to display.
+        </div>
+    {% endif %}
+</div>
+{% endblock content %}
+
