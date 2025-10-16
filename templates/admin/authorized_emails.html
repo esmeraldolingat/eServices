@@ -1,20 +1,53 @@
 {% extends "layout.html" %}
 {% block content %}
 <div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Manage Authorized Emails</h1>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
     <div class="row">
         <div class="col-md-4">
-            <h3>Authorize New Email</h3>
-            <form method="POST" action="">
-                {{ form.hidden_tag() }}
-                <div class="mb-3">
-                    {{ form.email.label(class="form-label") }}
-                    {{ form.email(class="form-control") }}
-                    {% for error in form.email.errors %}
-                        <div class="text-danger small mt-1">{{ error }}</div>
-                    {% endfor %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    Authorize New Email
                 </div>
-                {{ form.submit(class="btn btn-primary") }}
-            </form>
+                <div class="card-body">
+                    <form method="POST" action="">
+                        {{ add_form.hidden_tag() }}
+                        <div class="mb-3">
+                            {{ add_form.email.label(class="form-label") }}
+                            {{ add_form.email(class="form-control") }}
+                            {% for error in add_form.email.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {{ add_form.submit(class="btn btn-primary") }}
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    Bulk Upload via CSV
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="" enctype="multipart/form-data">
+                        {{ bulk_form.hidden_tag() }}
+                        <div class="mb-3">
+                            {{ bulk_form.csv_file.label(class="form-label") }}
+                            {{ bulk_form.csv_file(class="form-control") }}
+                             {% for error in bulk_form.csv_file.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <p class="small text-muted">Upload a CSV file with one email address per row in the first column.</p>
+                        {{ bulk_form.submit_bulk(class="btn btn-success") }}
+                    </form>
+                </div>
+            </div>
         </div>
 
         <div class="col-md-8">
@@ -24,7 +57,7 @@
                     <thead>
                         <tr>
                             <th scope="col">Email Address</th>
-                            <th scope="col">Actions</th>
+                            <th scope="col" style="width: 100px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>

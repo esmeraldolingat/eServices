@@ -8,6 +8,8 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.utils import secure_filename
 from flask_mail import Mail, Message
 from functools import wraps
+import csv # <--- BAGONG IMPORT
+import io  # <--- BAGONG IMPORT
 
 # --- IMPORTS FROM OUR PROJECT FILES ---
 from models import db, User, Department, Service, School, Ticket, Attachment, Response, CannedResponse, AuthorizedEmail
@@ -17,7 +19,7 @@ from forms import (
     LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm,
     LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
-    ResponseForm, EditUserForm, AddAuthorizedEmailForm  # <--- ITO ANG IDINAGDAG
+    ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm # <--- BAGONG IMPORT
 )
 
 # --- App Initialization and Config ---
@@ -215,20 +217,52 @@ def delete_user(user_id):
         flash('User not found.', 'danger')
     return redirect(url_for('manage_users'))
 
+# --- PALITAN ANG BUONG `manage_authorized_emails` FUNCTION NG NASA BABA ---
 @app.route('/admin/authorized-emails', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def manage_authorized_emails():
-    form = AddAuthorizedEmailForm()
-    if form.validate_on_submit():
-        new_email = AuthorizedEmail(email=form.email.data)
+    add_form = AddAuthorizedEmailForm()
+    bulk_form = BulkUploadForm()
+
+    # Logic para sa single email add form
+    if add_form.validate_on_submit() and add_form.submit.data:
+        new_email = AuthorizedEmail(email=add_form.email.data)
         db.session.add(new_email)
         db.session.commit()
-        flash(f'Email {form.email.data} has been authorized.', 'success')
+        flash(f'Email {add_form.email.data} has been authorized.', 'success')
         return redirect(url_for('manage_authorized_emails'))
-    
+
+    # Logic para sa bulk upload CSV form
+    if bulk_form.validate_on_submit() and bulk_form.submit_bulk.data:
+        csv_file = bulk_form.csv_file.data
+        stream = io.StringIO(csv_file.read().decode("UTF8"), newline=None)
+        csv_reader = csv.reader(stream)
+        
+        added_count = 0
+        duplicate_count = 0
+        
+        for row in csv_reader:
+            if row: # Siguraduhing hindi blangko ang row
+                email = row[0].strip()
+                if email: # Siguraduhing may email sa row
+                    existing = AuthorizedEmail.query.filter_by(email=email).first()
+                    if not existing:
+                        new_email = AuthorizedEmail(email=email)
+                        db.session.add(new_email)
+                        added_count += 1
+                    else:
+                        duplicate_count += 1
+        
+        if added_count > 0:
+            db.session.commit()
+
+        flash(f'Bulk upload complete. Added: {added_count} new emails. Duplicates skipped: {duplicate_count}.', 'info')
+        return redirect(url_for('manage_authorized_emails'))
+
     emails = AuthorizedEmail.query.order_by(AuthorizedEmail.email).all()
-    return render_template('admin/authorized_emails.html', emails=emails, form=form, title='Manage Authorized Emails')
+    return render_template('admin/authorized_emails.html', emails=emails, add_form=add_form, bulk_form=bulk_form, title='Manage Authorized Emails')
+
 
 @app.route('/admin/authorized-emails/<int:email_id>/delete', methods=['POST'])
 @login_required

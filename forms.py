@@ -58,6 +58,10 @@ class AddAuthorizedEmailForm(FlaskForm):
         if existing_email:
             raise ValidationError('That email address is already authorized.')
 
+class BulkUploadForm(FlaskForm):
+    csv_file = FileField('Upload CSV', validators=[FileRequired(), FileAllowed(['csv'], 'Only CSV files are allowed!')])
+    submit_bulk = SubmitField('Upload Bulk')
+
 # ======================================================
 # === TICKET & RESPONSE FORMS ==========================
 # ======================================================
