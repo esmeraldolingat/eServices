@@ -17,7 +17,7 @@ from forms import (
     LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm,
     LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
-    ResponseForm, EditUserForm
+    ResponseForm, EditUserForm, AddAuthorizedEmailForm  # <--- ITO ANG IDINAGDAG
 )
 
 # --- App Initialization and Config ---
@@ -214,6 +214,34 @@ def delete_user(user_id):
     else:
         flash('User not found.', 'danger')
     return redirect(url_for('manage_users'))
+
+@app.route('/admin/authorized-emails', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_authorized_emails():
+    form = AddAuthorizedEmailForm()
+    if form.validate_on_submit():
+        new_email = AuthorizedEmail(email=form.email.data)
+        db.session.add(new_email)
+        db.session.commit()
+        flash(f'Email {form.email.data} has been authorized.', 'success')
+        return redirect(url_for('manage_authorized_emails'))
+    
+    emails = AuthorizedEmail.query.order_by(AuthorizedEmail.email).all()
+    return render_template('admin/authorized_emails.html', emails=emails, form=form, title='Manage Authorized Emails')
+
+@app.route('/admin/authorized-emails/<int:email_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_authorized_email(email_id):
+    email_to_delete = db.session.get(AuthorizedEmail, email_id)
+    if email_to_delete:
+        db.session.delete(email_to_delete)
+        db.session.commit()
+        flash(f'Email {email_to_delete.email} has been removed from the authorized list.', 'success')
+    else:
+        flash('Email not found.', 'danger')
+    return redirect(url_for('manage_authorized_emails'))
 
 # =================================================================
 # === TICKET CREATION FLOW ========================================

@@ -48,6 +48,16 @@ class EditUserForm(FlaskForm):
     role = SelectField('Role', choices=[('User', 'User'), ('Admin', 'Admin')], validators=[DataRequired()])
     submit = SubmitField('Update User')
 
+class AddAuthorizedEmailForm(FlaskForm):
+    email = StringField('DepEd Email Address', validators=[DataRequired(), Email()])
+    submit = SubmitField('Add Email')
+
+    def validate_email(self, email):
+        """Checks if the email is already authorized."""
+        existing_email = AuthorizedEmail.query.filter_by(email=email.data).first()
+        if existing_email:
+            raise ValidationError('That email address is already authorized.')
+
 # ======================================================
 # === TICKET & RESPONSE FORMS ==========================
 # ======================================================
