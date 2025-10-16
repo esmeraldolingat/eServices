@@ -20,24 +20,29 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     {% if current_user.is_authenticated %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('home') }}">Dashboard</a>
-                        </li>
-                        
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('my_tickets') }}">My Tickets</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('select_department') }}">Create Ticket</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
-                        </li>
-                    {% endif %}
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('home') }}">Dashboard</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('my_tickets') }}">My Tickets</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('select_department') }}">Create Ticket</a>
+    </li>
+
+    {% if current_user.role == 'Admin' %}
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Admin Panel</a>
+    </li>
+    {% endif %}
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+    </li>
+{% else %}
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+    </li>
+{% endif %}
                 </ul>
             </div>
         </div>

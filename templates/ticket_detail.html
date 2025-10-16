@@ -1,165 +1,83 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Ticket #{{ ticket.ticket_number }}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        :root { --primary-color: #007bff; --light-gray: #f8f9fa; --gray: #6c757d; --dark-gray: #343a40; --border-color: #dee2e6; --danger-color: #dc3545; --success-color: #28a745; --white: #fff; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 2em; background-color: var(--light-gray); }
-        .container { max-width: 900px; margin: auto; }
-        .ticket-details { background: var(--white); padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1, h2 { color: var(--dark-gray); border-bottom: 2px solid var(--border-color); padding-bottom: 0.5em;}
-        strong { display: inline-block; width: 220px; color: var(--gray);}
-        p { line-height: 1.8; border-bottom: 1px solid #f0f0f0; padding: 0.8em 0; margin: 0; }
-        p:last-child { border-bottom: none; }
-        .description-box { background-color: var(--light-gray); padding: 1em; border-left: 4px solid var(--primary-color); margin-top: 1em; white-space: pre-wrap; }
-        a { color: var(--primary-color); }
-        .status-badge { padding: 0.3em 0.8em; border-radius: 12px; color: white; font-weight: bold; font-size: 0.9em; }
-        .status-New { background-color: var(--primary-color); }
-        .status-In\.Progress { background-color: #ffc107; color: var(--dark-gray); }
-        .status-Resolved { background-color: var(--success-color); }
-        .form-group { margin-bottom: 1.5em; }
-        label { display: block; margin-bottom: 0.5em; font-weight: 600; }
-        select, textarea { width: 100%; padding: 0.8em; font-size: 1em; border-radius: 4px; border: 1px solid var(--border-color); box-sizing: border-box; }
-        input[type="submit"] { background-color: var(--success-color); color: white; padding: 1em 2em; border: none; border-radius: 4px; font-size: 1em; cursor: pointer; }
-        input[type="submit"]:hover { background-color: #218838; }
-        .error { color: var(--danger-color); font-size: 0.9em; margin-top: 0.5em; display: block; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <p style="border-bottom: none; padding-bottom: 2em;"><a href="{{ url_for('home') }}">&larr; Back to Dashboard</a></p>
-        
-        <div class="ticket-details">
-            <h1>Ticket #{{ ticket.ticket_number }}</h1>
-            
-            <h2>Client Details</h2>
-            <p><strong>Status:</strong> <span class="status-badge status-{{ ticket.status.replace(' ', '.') }}">{{ ticket.status }}</span></p>
-            <p><strong>Client Name:</strong> {{ ticket.client_name }}</p>
-            <p><strong>Client Email:</strong> {{ ticket.client_email }}</p>
-            <p><strong>Department:</strong> {{ ticket.department }}</p>
-            <p><strong>Service Requested:</strong> {{ ticket.service_type }}</p>
-            <p><strong>Submitted On:</strong> {{ ticket.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
-
-            <h2>Request Specifics</h2>
-            
-            {% if ticket.department == 'ICT' %}
-                {% if ticket.service_type == 'Issuances and Online Materials' %}
-                    <p><strong>Document Title:</strong> {{ ticket.document_title or 'N/A' }}</p>
-                    <p><strong>Document Type:</strong> 
-                        {{ ticket.document_type or 'N/A' }}
-                        {% if ticket.document_type == 'Other' and ticket.document_type_other %}
-                            ({{ ticket.document_type_other }})
-                        {% endif %}
-                    </p>
-                {% elif ticket.service_type == 'Repair, Maintenance and Troubleshoot of IT Equipment' %}
-                    <p><strong>Device Type:</strong> 
-                        {{ ticket.device_type or 'N/A' }}
-                        {% if ticket.device_type == 'Other' and ticket.device_type_other %}
-                            ({{ ticket.device_type_other }})
-                        {% endif %}
-                    </p>
-                    <div class="description-box">
-                        <strong>Problem Description:</strong><br>
-                        {{ ticket.description or 'No description provided.' }}
-                    </div>
-                {% elif ticket.service_type == 'DepEd Email Account' %}
-                    <p><strong>School ID:</strong> {{ ticket.school_id or 'N/A' }}</p>
-                    <p><strong>School Name:</strong> {{ ticket.school_name or 'N/A' }}</p>
-                    <p><strong>Full Name:</strong> {{ ticket.personnel_first_name }} {{ ticket.personnel_middle_name }} {{ ticket.personnel_last_name }}</p>
-                    <p><strong>Extension Name:</strong> {{ ticket.ext_name or 'N/A' }}</p>
-                    <p><strong>Sex:</strong> {{ ticket.sex or 'N/A' }}</p>
-                    <p><strong>Date of Birth:</strong> {{ ticket.date_of_birth or 'N/A' }}</p>
-                    <p><strong>Position:</strong> 
-                        {{ ticket.position or 'N/A' }}
-                        {% if ticket.position == 'Other' and ticket.position_other %}
-                            ({{ ticket.position_other }})
-                        {% endif %}
-                    </p>
-                    <p><strong>Existing Email / N/A:</strong> {{ ticket.existing_email_or_na or 'N/A' }}</p>
-                    <p><strong>Request Remarks:</strong> 
-                        {{ ticket.remarks or 'N/A' }}
-                        {% if ticket.remarks == 'Other' and ticket.remarks_other %}
-                            ({{ ticket.remarks_other }})
-                        {% endif %}
-                    </p>
-                {% elif ticket.service_type == 'DPDS - DepEd Partnership Database System' %}
-                    <p><strong>School Name:</strong> {{ ticket.school_name or 'N/A' }}</p>
-                    <p><strong>Contact Number:</strong> {{ ticket.contact_number or 'N/A' }}</p>
-                    <p><strong>School ID:</strong> {{ ticket.school_id or 'N/A' }}</p>
-                    <p><strong>Remarks:</strong> {{ ticket.dpds_remarks or 'N/A' }}</p>
-                {% elif ticket.service_type in ['DCP - DepEd Computerization Program: After-sales', 'other ICT - Technical Assistance Needed'] %}
-                    <p><strong>School Name:</strong> {{ ticket.school_name or 'N/A' }}</p>
-                    <p><strong>Contact Number:</strong> {{ ticket.contact_number or 'N/A' }}</p>
-                    <div class="description-box">
-                        <strong>Description:</strong><br>
-                        {{ ticket.description or 'No description provided.' }}
-                    </div>
-                {% endif %}
-                
-                {% if ticket.attachment_filename %}
-                    <p><strong>Attachment:</strong> <a href="{{ url_for('static', filename='uploads/' + ticket.attachment_filename) }}" target="_blank">{{ ticket.attachment_filename }}</a></p>
-                {% endif %}
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3>Ticket #{{ ticket.ticket_number }}</h3>
+            {% if ticket.status == 'Open' %}
+                <span class="badge bg-success">{{ ticket.status }}</span>
+            {% elif ticket.status == 'In Progress' %}
+                <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
             {% else %}
-                <p>No specific details form implemented yet for this department.</p>
+                <span class="badge bg-secondary">{{ ticket.status }}</span>
             {% endif %}
+        </div>
+        <div class="card-body">
+            <h5 class="card-title">{{ ticket.service_type.name }}</h5>
+            <p class="card-text">
+                <strong>Department:</strong> {{ ticket.ticket_department.name }}<br>
+                <strong>Requester:</strong> {{ ticket.requester_name }} ({{ ticket.requester_email }})<br>
+                <strong>School/Office:</strong> {{ ticket.school.name }}<br>
+                <strong>Submitted On:</strong> {{ ticket.date_posted.strftime('%B %d, %Y at %I:%M %p') }}
+            </p>
+            <hr>
+            <h6>Request Details:</h6>
+{% if ticket.details %}
+    {% for key, value in ticket.details.items() %}
+        <p class="card-text mb-1">
+            <strong>{{ key.replace('_', ' ').title() }}:</strong> 
+            {{ value or 'N/A' }}
+        </p>
+    {% endfor %}
+{% else %}
+    <p class="card-text">No additional details provided.</p>
+{% endif %}
 
-            {% if ticket.resolution_details %}
-            <div class="description-box" style="margin-top: 2em; border-left-color: var(--success-color);">
-                <strong>Resolution Details:</strong><br>
-                {{ ticket.resolution_details }}
-            </div>
+            {% if ticket.attachments %}
+            <hr>
+            <h6>Attachments:</h6>
+            <ul>
+                {% for attachment in ticket.attachments %}
+                    <li><a href="{{ url_for('static', filename='uploads/' + attachment.filename) }}" target="_blank">{{ attachment.filename }}</a></li>
+                {% endfor %}
+            </ul>
             {% endif %}
-
-            <hr style="margin-top: 2em; margin-bottom: 2em;">
-            <h2>Update Ticket</h2>
-            <form method="POST" action="">
-                {{ form.hidden_tag() }}
-                <div class="form-group">
-                    {{ form.status.label }}
-                    {{ form.status() }}
-                    {% for error in form.status.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                </div>
-                <div class="form-group">
-                    {{ form.canned_response.label }}
-                    {{ form.canned_response(id='canned_response_select') }}
-                </div>
-                <div class="form-group">
-                    {{ form.resolution_details.label }}
-                    {{ form.resolution_details(rows=6, id='resolution_details_textarea') }}
-                    {% for error in form.resolution_details.errors %}<span class="error">{{ error }}</span>{% endfor %}
-                </div>
-                <div class="form-group">
-                    {{ form.submit() }}
-                </div>
-            </form>
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const cannedResponsesByDept = {{ CANNED_RESPONSES | tojson | safe }};
-            const ticketDepartment = '{{ ticket.department }}';
-            const cannedSelect = document.getElementById('canned_response_select');
-            const resolutionTextarea = document.getElementById('resolution_details_textarea');
+    <div class="mt-4">
+        <h4>Responses</h4>
+        <hr>
+        {% if ticket.responses %}
+            {% for response in ticket.responses %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <p class="card-text">{{ response.body }}</p>
+                </div>
+                <div class="card-footer text-muted small">
+                    by {{ response.author.name }} on {{ response.date_posted.strftime('%Y-%m-%d %H:%M') }}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>No responses yet.</p>
+        {% endif %}
+    </div>
 
-            if (cannedResponsesByDept[ticketDepartment]) {
-                cannedResponsesByDept[ticketDepartment].forEach(response => {
-                    const option = document.createElement('option');
-                    option.value = response;
-                    option.textContent = response.length > 90 ? response.substring(0, 90) + '...' : response;
-                    cannedSelect.appendChild(option);
-                });
-            }
+    <div class="mt-4">
+        <h4>Add a Response</h4>
+        <hr>
+        <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                {{ form.body.label(class="form-label") }}
+                {{ form.body(class="form-control", rows="4") }}
+            </div>
+            <div class="mb-3">
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
+    </div>
 
-            cannedSelect.addEventListener('change', function() {
-                const selectedText = this.value;
-                if (selectedText) {
-                    resolutionTextarea.value += (resolutionTextarea.value ? '\n\n' : '') + selectedText;
-                }
-            });
-        });
-    </script>
-</body>
-</html>
+</div>
+{% endblock content %}

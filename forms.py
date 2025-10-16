@@ -2,6 +2,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, SubmitField, PasswordField, TextAreaField, DateField
 from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, EqualTo
+# --- ITO ANG INAYOS NA IMPORT LINE ---
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from sqlalchemy import case
 
@@ -19,7 +20,7 @@ def is_authorized_email(form, field):
         raise ValidationError('This email address is not authorized to submit requests.')
 
 # ======================================================
-# === BASE & LOGIN FORMS ===============================
+# === BASE, LOGIN & ADMIN FORMS ========================
 # ======================================================
 
 class DepartmentSelectionForm(FlaskForm):
@@ -35,23 +36,27 @@ class LoginForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
 
-# Sa loob ng forms.py
+class EditUserForm(FlaskForm):
+    name = StringField('Full Name', validators=[DataRequired()])
+    email = StringField('Email Address', validators=[DataRequired(), Email()])
+    role = SelectField('Role', choices=[('User', 'User'), ('Admin', 'Admin')], validators=[DataRequired()])
+    submit = SubmitField('Update User')
+
+class EditUserForm(FlaskForm):
+    name = StringField('Full Name', validators=[DataRequired()])
+    email = StringField('Email Address', validators=[DataRequired(), Email()])
+    role = SelectField('Role', choices=[('User', 'User'), ('Admin', 'Admin')], validators=[DataRequired()])
+    submit = SubmitField('Update User')
+
+# ======================================================
+# === TICKET & RESPONSE FORMS ==========================
+# ======================================================
 
 class GeneralTicketForm(FlaskForm):
-    # (Mananatili ang requester_name, requester_email, etc. dito)
-    requester_name = StringField(
-        'Full Name',
-        validators=[DataRequired()]
-    )
-    requester_email = StringField(
-        'Email Address',
-        validators=[DataRequired(), Email()],
-        render_kw={'readonly': True} 
-    )
+    requester_name = StringField('Full Name', validators=[DataRequired()])
+    requester_email = StringField('Email Address', validators=[DataRequired(), Email()], render_kw={'readonly': True})
     requester_contact = StringField('Contact Number')
     school = SelectField('School/Office', coerce=int, validators=[DataRequired()])
-
-    # IDAGDAG ANG LINYANG ITO SA DULO NG MGA FIELDS
     submit = SubmitField('Submit Ticket')
 
     def __init__(self, *args, **kwargs):
@@ -60,8 +65,12 @@ class GeneralTicketForm(FlaskForm):
         all_schools = School.query.order_by(custom_order, School.name).all()
         self.school.choices = [(0, "-- Select your School/Office --")] + [(s.id, s.name) for s in all_schools]
 
+class ResponseForm(FlaskForm):
+    body = TextAreaField('Your Response', validators=[DataRequired()])
+    submit = SubmitField('Submit Response')
+
 # ======================================================
-# === ICT DEPARTMENT FORMS =============================
+# === (Ang iba pang specific forms ay mananatili dito) ==
 # ======================================================
 
 class IssuanceForm(GeneralTicketForm):
@@ -75,6 +84,8 @@ class RepairForm(GeneralTicketForm):
     device_type_other = StringField('If Other, please specify', validators=[Optional()])
     description = TextAreaField('Please provide a brief description of your request/concern.', validators=[DataRequired()])
 
+# ... (Ang lahat ng iba pang form definitions ay mananatiling pareho) ...
+# (Paki-copy-paste na lang ang natitirang bahagi ng iyong forms.py dito para hindi masyadong humaba)
 class EmailAccountForm(GeneralTicketForm):
     school_id = StringField('School ID', validators=[DataRequired()])
     teacher_name = StringField('Complete Name of Teacher or Personnel', validators=[DataRequired()])
@@ -97,10 +108,6 @@ class DcpForm(GeneralTicketForm):
 class OtherIctForm(GeneralTicketForm):
     school_id = StringField('School ID', validators=[DataRequired()])
     description = TextAreaField('Please provide a brief description of your request/concern.', validators=[DataRequired()])
-
-# ======================================================
-# === PERSONNEL DEPARTMENT FORMS =======================
-# ======================================================
 
 class LeaveApplicationForm(GeneralTicketForm):
     type_of_leave = SelectField('Type of Leave', choices=[('', '-- Select Type of Leave --'), ('Vacation Leave', 'Vacation Leave'), ('Mandatory/Forced Leave', 'Mandatory/Forced Leave'), ('Sick Leave', 'Sick Leave'), ('Maternity Leave', 'Maternity Leave'), ('Paternity Leave', 'Paternity Leave'), ('Special Privilege Leave', 'Special Privilege Leave'), ('Solo Parent Leave', 'Solo Parent Leave'), ('Study Leave', 'Study Leave'), ('10-Day VAWC Leave', '10-Day VAWC Leave'), ('Rehabilitation Privilege', 'Rehabilitation Privilege'), ('Special Leave Benefits for Women', 'Special Leave Benefits for Women'), ('Special Emergency (Calamity) Leave', 'Special Emergency (Calamity) Leave'), ('Adoption Leave', 'Adoption Leave'), ('Monetization of Leave Credits', 'Monetization of Leave Credits'), ('Compensatory time off (CTO)', 'Compensatory time off (CTO)'), ('Other', 'Other')], validators=[DataRequired()])
@@ -147,18 +154,10 @@ class GsisForm(GeneralTicketForm):
     previous_agency = StringField('If Yes, indicate the name of the agency', validators=[Optional()])
     attachment = FileField('Please upload a scanned copy of the advice (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
 
-# ======================================================
-# === LEGAL SERVICES DEPARTMENT FORMS ==================
-# ======================================================
-
 class NoPendingCaseForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])
     purpose = TextAreaField('Purpose of Request', validators=[DataRequired()])
     attachment = FileField('Please attach a scanned copy of the appointment or a DepEd ID (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
-
-# ======================================================
-# === OFFICE OF THE SDS FORMS ==========================
-# ======================================================
 
 class LocatorSlipForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])
@@ -179,10 +178,6 @@ class SubstituteTeacherForm(GeneralTicketForm):
 class AdmForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])
     attachment = FileField('Please attach a copy of your request for Alternative Delivery Mode (PDF Only)', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
-
-# ======================================================
-# === ACCOUNTING UNIT FORMS ============================
-# ======================================================
 
 class ProvidentFundForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])
@@ -216,10 +211,6 @@ class ProvidentFundForm(GeneralTicketForm):
     attachment_status = FileField(LABEL_STATUS, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
     attachment_statement = FileField(LABEL_STATEMENT, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
     attachment_clearance = FileField(LABEL_CLEARANCE, validators=[Optional(), FileAllowed(['pdf'], 'PDF documents only!')])
-
-# ======================================================
-# === SUPPLY OFFICE FORMS ==============================
-# ======================================================
 
 class IcsForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])

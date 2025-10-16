@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 from flask_mail import Mail, Message
+from functools import wraps
 
 # --- IMPORTS FROM OUR PROJECT FILES ---
 from models import db, User, Department, Service, School, Ticket, Attachment, Response, CannedResponse, AuthorizedEmail
@@ -15,7 +16,8 @@ from forms import (
     IssuanceForm, RepairForm, EmailAccountForm, DpdsForm, DcpForm, OtherIctForm,
     LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm,
     LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
-    ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm
+    ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
+    ResponseForm, EditUserForm
 )
 
 # --- App Initialization and Config ---
@@ -35,11 +37,8 @@ app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'admin@deped.gov.ph' # PALITAN MO ITO
-app.config['MAIL_PASSWORD'] = '1234567890123456' # PALITAN MO ITO
-
-
-
+app.config['MAIL_USERNAME'] = 'your-email@gmail.com' # PALITAN MO ITO
+app.config['MAIL_PASSWORD'] = 'your-google-app-password' # PALITAN MO ITO
 
 # --- Extensions ---
 db.init_app(app)
@@ -54,14 +53,25 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 # =================================================================
+# === ADMIN DECORATOR =============================================
+# =================================================================
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or current_user.role != 'Admin':
+            flash('You do not have permission to access this page.', 'danger')
+            return redirect(url_for('home'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# =================================================================
 # === HELPER FUNCTIONS ============================================
 # =================================================================
 
 def send_reset_email(user):
     token = user.get_reset_token()
-    msg = Message('Password Reset Request',
-                  sender=('TCSD e-Services', app.config['MAIL_USERNAME']),
-                  recipients=[user.email])
+    msg = Message('Password Reset Request', sender=('TCSD e-Services', app.config['MAIL_USERNAME']), recipients=[user.email])
     msg.body = f'''To reset your password, visit the following link:
 {url_for('reset_token', token=token, _external=True)}
 
@@ -95,7 +105,7 @@ def seed_db():
         if not School.query.filter_by(name=school_name).first(): db.session.add(School(name=school_name))
     db.session.commit()
     print("Schools seeded.")
-    AUTHORIZED_EMAILS = ['icts.tarlaccity@deped.gov.ph', 'esmeraldo.lingat@deped.gov.ph', 'pedro.penduko@deped.gov.ph']
+    AUTHORIZED_EMAILS = ['icts.tarlaccity@deped.gov.ph', 'esmeraldo.lingat@deped.gov.ph', 'pedro.penduko@deped.gov.ph', 'admin@deped.gov.ph']
     for email_address in AUTHORIZED_EMAILS:
         if not AuthorizedEmail.query.filter_by(email=email_address).first():
             db.session.add(AuthorizedEmail(email=email_address))
@@ -116,29 +126,97 @@ def create_admin():
     print('Admin user created successfully! (Email: admin@deped.gov.ph, Password: password123)')
 
 # =================================================================
-# === MAIN ROUTES =================================================
+# === MAIN & TICKET ROUTES ========================================
 # =================================================================
 
 @app.route('/')
 @login_required
 def home():
-    """Main dashboard view."""
     tickets = Ticket.query.order_by(Ticket.date_posted.desc()).all()
     return render_template('dashboard.html', tickets=tickets)
 
-@app.route('/ticket/<int:ticket_id>')
+@app.route('/my-tickets')
+@login_required
+def my_tickets():
+    tickets = Ticket.query.filter_by(requester_email=current_user.email).order_by(Ticket.date_posted.desc()).all()
+    return render_template('my_tickets.html', tickets=tickets, title='My Tickets')
+
+@app.route('/ticket/<int:ticket_id>', methods=['GET', 'POST'])
 @login_required
 def ticket_detail(ticket_id):
-    """View details of a single ticket."""
     ticket = db.session.get(Ticket, ticket_id)
     if not ticket:
         flash('Ticket not found!', 'error')
         return redirect(url_for('home'))
+
+    form = ResponseForm()
+    if form.validate_on_submit():
+        response = Response(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
+        db.session.add(response)
+        db.session.commit()
+        flash('Your response has been added successfully!', 'success')
+        return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
-    return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty)
+    return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form)
 
 # =================================================================
-# === 3-STEP TICKET CREATION FLOW =================================
+# === ADMIN ROUTES ================================================
+# =================================================================
+
+@app.route('/admin/dashboard')
+@login_required
+@admin_required
+def admin_dashboard():
+    return render_template('admin/dashboard.html', title='Admin Dashboard')
+
+@app.route('/admin/users')
+@login_required
+@admin_required
+def manage_users():
+    users = User.query.order_by(User.name).all()
+    return render_template('admin/users.html', users=users, title='Manage Users')
+
+@app.route('/admin/user/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_user(user_id):
+    user = db.session.get(User, user_id)
+    if not user:
+        flash('User not found.', 'danger')
+        return redirect(url_for('manage_users'))
+    form = EditUserForm()
+    if form.validate_on_submit():
+        user.name = form.name.data
+        user.email = form.email.data
+        user.role = form.role.data
+        db.session.commit()
+        flash(f'User {user.name} has been updated successfully!', 'success')
+        return redirect(url_for('manage_users'))
+    elif request.method == 'GET':
+        form.name.data = user.name
+        form.email.data = user.email
+        form.role.data = user.role
+    return render_template('admin/edit_user.html', form=form, user=user, title='Edit User')
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_user(user_id):
+    user = db.session.get(User, user_id)
+    if user:
+        if user.id == current_user.id:
+            flash('You cannot delete your own account.', 'danger')
+            return redirect(url_for('manage_users'))
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'User {user.name} has been deleted.', 'success')
+    else:
+        flash('User not found.', 'danger')
+    return redirect(url_for('manage_users'))
+
+# =================================================================
+# === TICKET CREATION FLOW ========================================
 # =================================================================
 
 @app.route('/create-ticket/select-department', methods=['GET'])
@@ -156,8 +234,6 @@ def select_service(department_id):
         flash('Invalid department selected.', 'error')
         return redirect(url_for('select_department'))
     return render_template('select_service.html', department=department, services=department.services, title=f'Select a Service for {department.name}')
-
-# PALITAN ANG BUONG LUMANG create_ticket_form FUNCTION NG ITO:
 
 @app.route('/create-ticket/form/<int:service_id>', methods=['GET', 'POST'])
 def create_ticket_form(service_id):
@@ -184,7 +260,6 @@ def create_ticket_form(service_id):
     FormClass = form_map.get(service.name, GeneralTicketForm)
     form = FormClass()
 
-    # Ito ang tamang logic para sa auto-filling ng email
     if request.method == 'GET' and current_user.is_authenticated:
         form.requester_email.data = current_user.email
 
@@ -197,7 +272,7 @@ def create_ticket_form(service_id):
                     details_data[field.name] = field.data.strftime('%Y-%m-%d') if field.data else None
                 elif field.type not in ['FileField', 'CSRFTokenField', 'SubmitField']:
                     details_data[field.name] = field.data
-        
+
         saved_filenames = []
         for field in form:
             if field.type == 'FileField' and hasattr(field, 'data') and field.data:
@@ -205,12 +280,12 @@ def create_ticket_form(service_id):
                 filename = secure_filename(f"{field.name}_{file.filename}")
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                 saved_filenames.append(filename)
-        
+
         current_year = datetime.now(timezone.utc).year
         last_ticket = Ticket.query.order_by(Ticket.id.desc()).first()
         new_sequence = (int(last_ticket.ticket_number.split('-')[-1]) + 1) if last_ticket else 1
         new_ticket_number = f'TCSD-{current_year}-{new_sequence:04d}'
-        
+
         new_ticket = Ticket(
             ticket_number=new_ticket_number,
             requester_name=form.requester_name.data,
@@ -224,18 +299,18 @@ def create_ticket_form(service_id):
         )
         db.session.add(new_ticket)
         db.session.commit()
-        
+
         for fname in saved_filenames:
             db.session.add(Attachment(filename=fname, ticket_id=new_ticket.id))
         db.session.commit()
-        
+
         flash(f'Your ticket has been created! Your ticket number is {new_ticket_number}.', 'success')
         return redirect(url_for('home'))
-        
+
     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
 # =================================================================
-# === USER AUTHENTICATION ROUTES ==================================
+# === USER AUTHENTICATION =========================================
 # =================================================================
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -281,11 +356,11 @@ def reset_request():
     form = RequestResetForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
-        send_reset_email(user)
+        if user:
+            send_reset_email(user)
         flash('An email has been sent with instructions to reset your password.', 'info')
         return redirect(url_for('login'))
     return render_template('request_reset.html', title='Reset Password', form=form)
-
 
 @app.route("/reset_password/<token>", methods=['GET', 'POST'])
 def reset_token(token):
@@ -304,22 +379,6 @@ def reset_token(token):
     return render_template('reset_token.html', title='Reset Password', form=form)
 
 # =================================================================
-# Ilagay ito sa ilalim ng @app.route('/') section sa app.py
-
-@app.route('/my-tickets')
-@login_required
-def my_tickets():
-    """Shows all tickets created by the current logged-in user."""
-
-    # Kukunin natin lahat ng tickets kung saan ang email ng gumawa
-    # ay pareho sa email ng kasalukuyang naka-login na user.
-    tickets = Ticket.query.filter_by(requester_email=current_user.email)\
-                           .order_by(Ticket.date_posted.desc())\
-                           .all()
-
-    return render_template('my_tickets.html', tickets=tickets, title='My Tickets')
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
