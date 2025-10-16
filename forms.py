@@ -35,12 +35,23 @@ class LoginForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired()])
     submit = SubmitField('Login')
 
+# Sa loob ng forms.py
+
 class GeneralTicketForm(FlaskForm):
-    """Base form with common requester info."""
-    requester_name = StringField('Full Name', validators=[DataRequired(), Length(min=2, max=100)])
-    requester_email = StringField('DepEd Email Address', validators=[DataRequired(), Email(), is_authorized_email])
-    requester_contact = StringField('Contact Number', validators=[DataRequired(), Length(min=7, max=15)])
-    school = SelectField('School / Office', coerce=int, validators=[DataRequired()])
+    # (Mananatili ang requester_name, requester_email, etc. dito)
+    requester_name = StringField(
+        'Full Name',
+        validators=[DataRequired()]
+    )
+    requester_email = StringField(
+        'Email Address',
+        validators=[DataRequired(), Email()],
+        render_kw={'readonly': True} 
+    )
+    requester_contact = StringField('Contact Number')
+    school = SelectField('School/Office', coerce=int, validators=[DataRequired()])
+
+    # IDAGDAG ANG LINYANG ITO SA DULO NG MGA FIELDS
     submit = SubmitField('Submit Ticket')
 
     def __init__(self, *args, **kwargs):

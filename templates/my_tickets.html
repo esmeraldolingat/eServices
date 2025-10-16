@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">My Submitted Tickets</h1>
+
+    {% if tickets %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th scope="col">Ticket Number</th>
+                        <th scope="col">Service Requested</th>
+                        <th scope="col">Date Submitted</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ticket in tickets %}
+                    <tr>
+                        <td>{{ ticket.ticket_number }}</td>
+                        <td>{{ ticket.service_type.name }}</td>
+                        <td>{{ ticket.date_posted.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            {% if ticket.status == 'Open' %}
+                                <span class="badge bg-success">{{ ticket.status }}</span>
+                            {% elif ticket.status == 'In Progress' %}
+                                <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ ticket.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}" class="btn btn-primary btn-sm">View Details</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info" role="alert">
+            You have not submitted any tickets yet.
+        </div>
+    {% endif %}
+</div>
+{% endblock content %}

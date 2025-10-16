@@ -157,12 +157,15 @@ def select_service(department_id):
         return redirect(url_for('select_department'))
     return render_template('select_service.html', department=department, services=department.services, title=f'Select a Service for {department.name}')
 
+# PALITAN ANG BUONG LUMANG create_ticket_form FUNCTION NG ITO:
+
 @app.route('/create-ticket/form/<int:service_id>', methods=['GET', 'POST'])
 def create_ticket_form(service_id):
     service = db.session.get(Service, service_id)
     if not service:
         flash('Invalid service selected.', 'error')
         return redirect(url_for('select_department'))
+
     form_map = {
         'Issuances and Online Materials': IssuanceForm, 'Repair, Maintenance and Troubleshoot of IT Equipment': RepairForm,
         'DepEd Email Account': EmailAccountForm, 'DPDS - DepEd Partnership Database System': DpdsForm,
@@ -180,13 +183,21 @@ def create_ticket_form(service_id):
     }
     FormClass = form_map.get(service.name, GeneralTicketForm)
     form = FormClass()
+
+    # Ito ang tamang logic para sa auto-filling ng email
+    if request.method == 'GET' and current_user.is_authenticated:
+        form.requester_email.data = current_user.email
+
     if form.validate_on_submit():
         details_data = {}
         general_fields = {field.name for field in GeneralTicketForm()}
         for field in form:
             if field.name not in general_fields:
-                if field.type == 'DateField': details_data[field.name] = field.data.strftime('%Y-%m-%d') if field.data else None
-                elif field.type not in ['FileField', 'CSRFTokenField', 'SubmitField']: details_data[field.name] = field.data
+                if field.type == 'DateField':
+                    details_data[field.name] = field.data.strftime('%Y-%m-%d') if field.data else None
+                elif field.type not in ['FileField', 'CSRFTokenField', 'SubmitField']:
+                    details_data[field.name] = field.data
+        
         saved_filenames = []
         for field in form:
             if field.type == 'FileField' and hasattr(field, 'data') and field.data:
@@ -194,18 +205,33 @@ def create_ticket_form(service_id):
                 filename = secure_filename(f"{field.name}_{file.filename}")
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                 saved_filenames.append(filename)
+        
         current_year = datetime.now(timezone.utc).year
         last_ticket = Ticket.query.order_by(Ticket.id.desc()).first()
         new_sequence = (int(last_ticket.ticket_number.split('-')[-1]) + 1) if last_ticket else 1
         new_ticket_number = f'TCSD-{current_year}-{new_sequence:04d}'
-        new_ticket = Ticket(ticket_number=new_ticket_number, requester_name=form.requester_name.data, requester_email=form.requester_email.data, requester_contact=form.requester_contact.data, school_id=form.school.data, department_id=service.department.id, service_id=service.id, status='Open', details=details_data)
+        
+        new_ticket = Ticket(
+            ticket_number=new_ticket_number,
+            requester_name=form.requester_name.data,
+            requester_email=form.requester_email.data,
+            requester_contact=form.requester_contact.data,
+            school_id=form.school.data,
+            department_id=service.department.id,
+            service_id=service.id,
+            status='Open',
+            details=details_data
+        )
         db.session.add(new_ticket)
         db.session.commit()
+        
         for fname in saved_filenames:
             db.session.add(Attachment(filename=fname, ticket_id=new_ticket.id))
         db.session.commit()
+        
         flash(f'Your ticket has been created! Your ticket number is {new_ticket_number}.', 'success')
         return redirect(url_for('home'))
+        
     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
 # =================================================================
@@ -278,6 +304,22 @@ def reset_token(token):
     return render_template('reset_token.html', title='Reset Password', form=form)
 
 # =================================================================
+# Ilagay ito sa ilalim ng @app.route('/') section sa app.py
+
+@app.route('/my-tickets')
+@login_required
+def my_tickets():
+    """Shows all tickets created by the current logged-in user."""
+
+    # Kukunin natin lahat ng tickets kung saan ang email ng gumawa
+    # ay pareho sa email ng kasalukuyang naka-login na user.
+    tickets = Ticket.query.filter_by(requester_email=current_user.email)\
+                           .order_by(Ticket.date_posted.desc())\
+                           .all()
+
+    return render_template('my_tickets.html', tickets=tickets, title='My Tickets')
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
