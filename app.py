@@ -22,7 +22,8 @@ from forms import (
     LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm,
     LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
-    ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm
+    ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm,
+    UpdateTicketForm
 )
 
 # --- App Initialization and Config ---
@@ -86,6 +87,27 @@ def send_reset_email(user):
 {url_for('reset_token', token=token, _external=True)}
 
 If you did not make this request then simply ignore this email and no changes will be made.
+'''
+    mail.send(msg)
+
+def send_resolution_email(ticket, response_body):
+    msg = Message(f'Update on your Ticket: #{ticket.ticket_number} - RESOLVED',
+                  sender=('TCSD e-Services', app.config['MAIL_USERNAME']),
+                  recipients=[ticket.requester_email])
+    msg.body = f'''
+Hi {ticket.requester_name},
+
+Your ticket with the number #{ticket.ticket_number} regarding "{ticket.service_type.name}" has been marked as RESOLVED.
+
+Here is the final response from our team:
+--------------------------------------------------
+{response_body}
+--------------------------------------------------
+
+If you have further questions, please create a new ticket.
+
+Thank you,
+TCSD e-Services Team
 '''
     mail.send(msg)
 
@@ -153,7 +175,6 @@ def home():
 def staff_dashboard():
     """Shows tickets for services managed by the current staff user."""
     managed_service_ids = [service.id for service in current_user.managed_services]
-
     if current_user.role == 'Admin':
         tickets = Ticket.query.order_by(Ticket.date_posted.desc()).all()
         title = "All System Tickets"
@@ -164,7 +185,6 @@ def staff_dashboard():
         tickets = []
         title = "My Managed Tickets"
         flash("You are not assigned to manage any services.", "info")
-
     return render_template('staff_dashboard.html', tickets=tickets, title=title)
 
 @app.route('/my-tickets')
@@ -181,16 +201,47 @@ def ticket_detail(ticket_id):
         flash('Ticket not found!', 'error')
         return redirect(url_for('home'))
 
-    form = ResponseForm()
+    is_staff_or_admin = current_user.role == 'Admin' or current_user in ticket.service_type.managers
+    
+    if is_staff_or_admin:
+        form = UpdateTicketForm()
+    else:
+        form = ResponseForm()
+
     if form.validate_on_submit():
+        if ticket.status == 'Resolved' and not is_staff_or_admin:
+            flash('This ticket is already resolved and cannot receive new responses.', 'info')
+            return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+
+        if form.attachment.data:
+            file = form.attachment.data
+            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+            filename = f"{timestamp}_{secure_filename(file.filename)}"
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            new_attachment = Attachment(filename=filename, ticket_id=ticket.id)
+            db.session.add(new_attachment)
+
         response = Response(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
         db.session.add(response)
+
+        if hasattr(form, 'status'):
+            ticket.status = form.status.data
+            if ticket.status == 'Resolved':
+                send_resolution_email(ticket, form.body.data)
+                flash('Your response has been added and a resolution email has been sent to the client.', 'success')
+            else:
+                flash('Your response has been added and the ticket status has been updated.', 'success')
+        else:
+            flash('Your response has been added successfully!', 'success')
+
         db.session.commit()
-        flash('Your response has been added successfully!', 'success')
         return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+    
+    if request.method == 'GET' and hasattr(form, 'status'):
+        form.status.data = ticket.status
 
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
-    return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form)
+    return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin)
 
 # =================================================================
 # === ADMIN ROUTES ================================================
@@ -231,7 +282,6 @@ def edit_user(user_id):
         db.session.commit()
         flash(f'User {user.name} has been updated successfully!', 'success')
         return redirect(url_for('manage_users'))
-
     departments = Department.query.order_by(Department.name).all()
     managed_service_ids = {service.id for service in user.managed_services}
     return render_template('admin/edit_user.html', form=form, user=user, departments=departments, managed_service_ids=managed_service_ids, title='Edit User')
@@ -241,13 +291,12 @@ def edit_user(user_id):
 @admin_required
 def delete_user(user_id):
     user = db.session.get(User, user_id)
-    if user:
-        if user.id == current_user.id:
-            flash('You cannot delete your own account.', 'danger')
-            return redirect(url_for('manage_users'))
+    if user and user.id != current_user.id:
         db.session.delete(user)
         db.session.commit()
         flash(f'User {user.name} has been deleted.', 'success')
+    elif user.id == current_user.id:
+        flash('You cannot delete your own account.', 'danger')
     else:
         flash('User not found.', 'danger')
     return redirect(url_for('manage_users'))
@@ -378,7 +427,6 @@ def create_ticket_form(service_id):
     if not service:
         flash('Invalid service selected.', 'error')
         return redirect(url_for('select_department'))
-
     form_map = {
         'Issuances and Online Materials': IssuanceForm, 'Repair, Maintenance and Troubleshoot of IT Equipment': RepairForm,
         'DepEd Email Account': EmailAccountForm, 'DPDS - DepEd Partnership Database System': DpdsForm,
@@ -396,10 +444,8 @@ def create_ticket_form(service_id):
     }
     FormClass = form_map.get(service.name, GeneralTicketForm)
     form = FormClass()
-
     if request.method == 'GET' and current_user.is_authenticated:
         form.requester_email.data = current_user.email
-
     if form.validate_on_submit():
         details_data = {}
         general_fields = {field.name for field in GeneralTicketForm()}
@@ -409,7 +455,6 @@ def create_ticket_form(service_id):
                     details_data[field.name] = field.data.strftime('%Y-%m-%d') if field.data else None
                 elif field.type not in ['FileField', 'CSRFTokenField', 'SubmitField']:
                     details_data[field.name] = field.data
-
         saved_filenames = []
         for field in form:
             if field.type == 'FileField' and hasattr(field, 'data') and field.data:
@@ -417,12 +462,10 @@ def create_ticket_form(service_id):
                 filename = secure_filename(f"{field.name}_{file.filename}")
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                 saved_filenames.append(filename)
-
         current_year = datetime.now(timezone.utc).year
         last_ticket = Ticket.query.order_by(Ticket.id.desc()).first()
         new_sequence = (int(last_ticket.ticket_number.split('-')[-1]) + 1) if last_ticket else 1
         new_ticket_number = f'TCSD-{current_year}-{new_sequence:04d}'
-
         new_ticket = Ticket(
             ticket_number=new_ticket_number,
             requester_name=form.requester_name.data,
@@ -436,14 +479,11 @@ def create_ticket_form(service_id):
         )
         db.session.add(new_ticket)
         db.session.commit()
-
         for fname in saved_filenames:
             db.session.add(Attachment(filename=fname, ticket_id=new_ticket.id))
         db.session.commit()
-
         flash(f'Your ticket has been created! Your ticket number is {new_ticket_number}.', 'success')
         return redirect(url_for('home'))
-
     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
 # =================================================================
@@ -519,3 +559,4 @@ def reset_token(token):
 
 if __name__ == '__main__':
     app.run(debug=True)
+

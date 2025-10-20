@@ -84,7 +84,16 @@ class GeneralTicketForm(FlaskForm):
 
 class ResponseForm(FlaskForm):
     body = TextAreaField('Your Response', validators=[DataRequired()])
+    attachment = FileField('Add Attachment (Optional)', validators=[Optional(), FileAllowed(['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'], 'Allowed file types are: pdf, images, word docs')])
     submit = SubmitField('Submit Response')
+
+class UpdateTicketForm(FlaskForm):
+    body = TextAreaField('Response / Resolution Details', validators=[DataRequired()])
+    status = SelectField('Update Status', choices=[('Open', 'Open'), ('In Progress', 'In Progress'), ('Resolved', 'Resolved')], validators=[DataRequired()])
+    attachment = FileField('Add Attachment (Optional)', validators=[Optional(), FileAllowed(['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'], 'Allowed file types are: pdf, images, word docs')])
+    submit = SubmitField('Submit Update')
+
+
 
 # ======================================================
 # === ICT DEPARTMENT FORMS =============================
