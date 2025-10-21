@@ -8,14 +8,27 @@
         </a>
     </div>
 
-    <!-- Quarter Filter Buttons -->
-    <div class="d-flex justify-content-center mb-4">
+    <!-- Filters Section -->
+    <div class="d-flex justify-content-center align-items-center mb-4 gap-3">
+        <!-- Year Filter -->
+        <div class="dropdown">
+            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="yearFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                Year: {{ selected_year }}
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="yearFilter">
+                {% for year in available_years %}
+                <li><a class="dropdown-item {% if year == selected_year %}active{% endif %}" href="{{ url_for('staff_dashboard', year=year, quarter=0) }}">{{ year }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Quarter Filter Buttons -->
         <div class="btn-group shadow-sm" role="group" aria-label="Quarter filters">
-            <a href="{{ url_for('staff_dashboard', quarter=0) }}" class="btn {% if selected_quarter == 0 %}btn-primary{% else %}btn-outline-primary{% endif %}">All Time</a>
-            <a href="{{ url_for('staff_dashboard', quarter=1) }}" class="btn {% if selected_quarter == 1 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q1</a>
-            <a href="{{ url_for('staff_dashboard', quarter=2) }}" class="btn {% if selected_quarter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q2</a>
-            <a href="{{ url_for('staff_dashboard', quarter=3) }}" class="btn {% if selected_quarter == 3 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q3</a>
-            <a href="{{ url_for('staff_dashboard', quarter=4) }}" class="btn {% if selected_quarter == 4 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q4</a>
+            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=0) }}" class="btn {% if selected_quarter == 0 %}btn-primary{% else %}btn-outline-primary{% endif %}">All Year</a>
+            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=1) }}" class="btn {% if selected_quarter == 1 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q1</a>
+            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=2) }}" class="btn {% if selected_quarter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q2</a>
+            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=3) }}" class="btn {% if selected_quarter == 3 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q3</a>
+            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=4) }}" class="btn {% if selected_quarter == 4 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q4</a>
         </div>
     </div>
 
@@ -65,19 +78,19 @@
             <nav aria-label="Active tickets navigation">
                 <ul class="pagination justify-content-center mb-0">
                     <li class="page-item {% if not active_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, quarter=selected_quarter) }}">Previous</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, year=selected_year, quarter=selected_quarter) }}">Previous</a>
                     </li>
                     {% for page_num in active_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {% if active_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, quarter=selected_quarter) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, year=selected_year, quarter=selected_quarter) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
                     <li class="page-item {% if not active_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, quarter=selected_quarter) }}">Next</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, year=selected_year, quarter=selected_quarter) }}">Next</a>
                     </li>
                 </ul>
             </nav>
@@ -125,19 +138,19 @@
              <nav aria-label="Resolved tickets navigation">
                 <ul class="pagination justify-content-center mb-0">
                     <li class="page-item {% if not resolved_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.prev_num, quarter=selected_quarter) }}">Previous</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.prev_num, year=selected_year, quarter=selected_quarter) }}">Previous</a>
                     </li>
                     {% for page_num in resolved_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {% if resolved_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=page_num, quarter=selected_quarter) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=page_num, year=selected_year, quarter=selected_quarter) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
                     <li class="page-item {% if not resolved_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.next_num, quarter=selected_quarter) }}">Next</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.next_num, year=selected_year, quarter=selected_quarter) }}">Next</a>
                     </li>
                 </ul>
             </nav>

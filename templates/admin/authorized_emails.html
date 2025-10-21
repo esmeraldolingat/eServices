@@ -2,20 +2,22 @@
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Manage Authorized Emails</h1>
-        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+        <div>
+            <h1 class="mb-0">Manage Authorized Emails</h1>
+            <p class="text-muted">Total Authorized Emails: {{ emails.total }}</p>
+        </div>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Back to Dashboard
         </a>
     </div>
 
     <div class="row">
+        <!-- Add Forms Column -->
         <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header">
-                    Authorize New Email
-                </div>
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">Authorize New Email</div>
                 <div class="card-body">
-                    <form method="POST" action="">
+                    <form method="POST" action="{{ url_for('manage_authorized_emails') }}">
                         {{ add_form.hidden_tag() }}
                         <div class="mb-3">
                             {{ add_form.email.label(class="form-label") }}
@@ -24,17 +26,14 @@
                                 <div class="text-danger small mt-1">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        {{ add_form.submit(class="btn btn-primary") }}
+                        {{ add_form.submit(class="btn btn-primary w-100") }}
                     </form>
                 </div>
             </div>
-
-            <div class="card">
-                <div class="card-header">
-                    Bulk Upload via CSV
-                </div>
+            <div class="card shadow-sm">
+                <div class="card-header">Bulk Upload via CSV</div>
                 <div class="card-body">
-                    <form method="POST" action="" enctype="multipart/form-data">
+                    <form method="POST" action="{{ url_for('manage_authorized_emails') }}" enctype="multipart/form-data">
                         {{ bulk_form.hidden_tag() }}
                         <div class="mb-3">
                             {{ bulk_form.csv_file.label(class="form-label") }}
@@ -43,42 +42,102 @@
                                 <div class="text-danger small mt-1">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <p class="small text-muted">Upload a CSV file with one email address per row in the first column.</p>
-                        {{ bulk_form.submit_bulk(class="btn btn-success") }}
+                        <p class="small text-muted">Upload a CSV with one email per row.</p>
+                        {{ bulk_form.submit_bulk(class="btn btn-success w-100") }}
                     </form>
                 </div>
             </div>
         </div>
 
+        <!-- List of Authorized Emails Column -->
         <div class="col-md-8">
-            <h3>Currently Authorized Emails</h3>
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th scope="col">Email Address</th>
-                            <th scope="col" style="width: 100px;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for email in emails %}
-                        <tr>
-                            <td>{{ email.email }}</td>
-                            <td>
-                                <form action="{{ url_for('delete_authorized_email', email_id=email.id) }}" method="POST">
-                                    <input type="submit" value="Delete" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to remove this email?');">
-                                </form>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="2">No authorized emails found.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <form method="GET" action="{{ url_for('manage_authorized_emails') }}" class="d-flex">
+                        <input type="search" name="search" class="form-control me-2" placeholder="Search for an email..." value="{{ search_query or '' }}">
+                        <button type="submit" class="btn btn-outline-secondary">Search</button>
+                    </form>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('manage_authorized_emails', search=search_query, page=emails.page) }}">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" style="width: 50px;">
+                                            <input class="form-check-input" type="checkbox" id="select-all">
+                                        </th>
+                                        <th scope="col">Email Address</th>
+                                        <th scope="col" class="text-end" style="width: 100px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for email in emails.items %}
+                                    <tr>
+                                        <td>
+                                            <input class="form-check-input email-checkbox" type="checkbox" name="email_ids" value="{{ email.id }}">
+                                        </td>
+                                        <td>{{ email.email }}</td>
+                                        <td class="text-end">
+                                            <form action="{{ url_for('delete_authorized_email', email_id=email.id) }}" method="POST" class="d-inline">
+                                                <input type="submit" value="Delete" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to remove this email?');">
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted">No authorized emails found.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if emails.items %}
+                        <button type="submit" name="delete_selected" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete all selected emails?');">Delete Selected</button>
+                        {% endif %}
+                    </form>
+                </div>
+                {% if emails.pages > 1 %}
+                <div class="card-footer">
+                    <nav aria-label="Email list navigation">
+                        <ul class="pagination justify-content-center mb-0">
+                            <li class="page-item {% if not emails.has_prev %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('manage_authorized_emails', page=emails.prev_num, search=search_query) }}">Previous</a>
+                            </li>
+                            {% for page_num in emails.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    <li class="page-item {% if emails.page == page_num %}active{% endif %}">
+                                        <a class="page-link" href="{{ url_for('manage_authorized_emails', page=page_num, search=search_query) }}">{{ page_num }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+                            <li class="page-item {% if not emails.has_next %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('manage_authorized_emails', page=emails.next_num, search=search_query) }}">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const emailCheckboxes = document.querySelectorAll('.email-checkbox');
+
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            emailCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+        });
+    }
+});
+</script>
 {% endblock content %}
+
