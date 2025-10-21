@@ -1,61 +1,63 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="container">
+<div class="container mt-4">
     <div class="row justify-content-center">
         <div class="col-md-8">
             <div class="card shadow-sm">
                 <div class="card-header">
-                    <h3>{{ title }}</h3>
-                    <p class="text-muted mb-0">Department: {{ service.department.name }}</p>
+                    <h4 class="mb-0">Request for: {{ service.name }}</h4>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="" enctype="multipart/form-data">
                         {{ form.hidden_tag() }}
                         
-                        <fieldset class="form-group">
-                            <legend class="border-bottom mb-4 h5"><i class="bi bi-person-fill"></i> Your Information</legend>
-                            <div class="form-group mb-3">{{ form.requester_name.label(class="form-control-label") }} {{ form.requester_name(class="form-control form-control-lg") }}</div>
-                            <div class="form-group mb-3">{{ form.requester_email.label(class="form-control-label") }} {{ form.requester_email(class="form-control form-control-lg") }}</div>
-                            <div class="form-group mb-3">{{ form.requester_contact.label(class="form-control-label") }} {{ form.requester_contact(class="form-control form-control-lg") }}</div>
-                            <div class="form-group mb-3">{{ form.school.label(class="form-control-label") }} {{ form.school(class="form-control form-control-lg") }}</div>
+                        <fieldset class="mb-4">
+                            <legend class="h6">Your Information</legend>
+                            <div class="mb-3">
+                                {{ form.requester_name.label(class="form-label") }}
+                                {{ form.requester_name(class="form-control") }}
+                                {% for error in form.requester_name.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                {{ form.requester_email.label(class="form-label") }}
+                                {{ form.requester_email(class="form-control") }}
+                                {% for error in form.requester_email.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                {{ form.requester_contact.label(class="form-label") }}
+                                {{ form.requester_contact(class="form-control") }}
+                                {% for error in form.requester_contact.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="mb-3">
+                                {{ form.school.label(class="form-label") }}
+                                {{ form.school(class="form-select") }}
+                                {% for error in form.school.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
                         </fieldset>
 
-                        <div class="p-4 mt-4 rounded border" style="background-color: #e9ecef;">
-                            <fieldset class="form-group">
-                                <legend class="border-bottom mb-4 h5"><i class="bi bi-card-list"></i> Request Details</legend>
-                                
-                                {% for field in form %}
-                                    {% if field.name not in ['requester_name', 'requester_email', 'requester_contact', 'school', 'csrf_token', 'submit'] %}
-                                        <div class="form-group mb-3" id="div_{{ field.name }}">
-                                            
-                                            {% if '\n' in field.label.text %}
-                                                {# If the label text has line breaks, render it with a special style #}
-                                                {{ field.label(class="form-control-label", style="white-space: pre-line;") }}
-                                            {% else %}
-                                                {# Otherwise, render it normally #}
-                                                {{ field.label(class="form-control-label") }}
-                                            {% endif %}
-                                            
-                                            {% if field.type == 'FileField' %}
-                                                {{ field(class="form-control", accept=".pdf") }}
-                                            {% else %}
-                                                {{ field(class="form-control form-control-lg") }}
-                                            {% endif %}
-                                            {% for error in field.errors %}
-                                                <span class="text-danger">{{ error }}</span>
-                                            {% endfor %}
-                                        </div>
-                                    {% endif %}
-                                {% endfor %}
+                        <fieldset>
+                            <legend class="h6">Request Details</legend>
+                            {% for field in form if field.name not in ['csrf_token', 'requester_name', 'requester_email', 'requester_contact', 'school', 'submit'] %}
+                                <div class="mb-3" id="div-{{ field.name }}">
+                                    {{ field.label(class="form-label") }}
+                                    {{ field(class="form-control") }}
+                                    {% for error in field.errors %}
+                                        <div class="text-danger small mt-1">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </fieldset>
 
-                            </fieldset>
-                        </div>
-                        
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-                            <a href="{{ url_for('select_service', department_id=service.department.id) }}" class="btn btn-outline-secondary btn-lg">
-                                ← Back
-                            </a>
-                            {{ form.submit(class="btn btn-primary btn-lg") }}
+                        <div class="mt-4">
+                            {{ form.submit(class="btn btn-primary") }}
                         </div>
                     </form>
                 </div>
@@ -64,88 +66,32 @@
     </div>
 </div>
 
+<!-- ITO ANG BAGONG SIMPLIFIED SCRIPT -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // --- Logic for "Other" textboxes ---
-        const allSelects = document.querySelectorAll('form select');
-        allSelects.forEach(setupConditionalLogicForOther);
+        const selectsWithOther = document.querySelectorAll('select');
 
-        function setupConditionalLogicForOther(selectElement) {
-            const otherFieldName = selectElement.name + '_other';
-            const otherFieldDiv = document.getElementById('div_' + otherFieldName);
-            if (!otherFieldDiv) return;
+        selectsWithOther.forEach(selectElement => {
+            const otherInputName = selectElement.name + '_other';
+            const otherInputDiv = document.getElementById('div-' + otherInputName);
 
-            function toggle() {
-                otherFieldDiv.style.display = (selectElement.value === 'Other') ? 'block' : 'none';
-            }
-            toggle();
-            selectElement.addEventListener('change', toggle);
-        }
-
-        // --- Logic for COE Remarks ---
-        const coeRemarksSelect = document.querySelector('select[name="remarks"]');
-        if (coeRemarksSelect) {
-            const withCompFields = ['div_first_day_cert_attachment', 'div_coe_wo_comp_attachment'];
-            const withoutCompFields = ['div_payslip_attachment', 'div_coe_w_comp_attachment'];
-            
-            function toggleCoeFields() {
-                const selectedValue = coeRemarksSelect.value;
-                withCompFields.forEach(id => {
-                    const el = document.getElementById(id);
-                    if(el) el.style.display = (selectedValue === 'With Compensation') ? 'block' : 'none';
-                });
-                withoutCompFields.forEach(id => {
-                    const el = document.getElementById(id);
-                    if(el) el.style.display = (selectedValue === 'Without Compensation') ? 'block' : 'none';
-                });
-            }
-            toggleCoeFields();
-            coeRemarksSelect.addEventListener('change', toggleCoeFields);
-        }
-
-        // --- Logic for GSIS "Previous Appointment" ---
-        const prevAppointmentSelect = document.querySelector('select[name="previous_appointment"]');
-        if (prevAppointmentSelect) {
-            const agencyFieldDiv = document.getElementById('div_previous_agency');
-            
-            function toggleAgencyField() {
-                if (agencyFieldDiv) {
-                    agencyFieldDiv.style.display = (prevAppointmentSelect.value === 'Yes') ? 'block' : 'none';
-                }
-            }
-            toggleAgencyField();
-            prevAppointmentSelect.addEventListener('change', toggleAgencyField);
-        }
-        
-        // --- Logic for Provident Fund Query ---
-        const providentQuerySelect = document.querySelector('select[name="query"]');
-        if (providentQuerySelect) {
-            const fieldMap = {
-                'Application for a Provident Loan (1st time Borrower)': 'div_attachment_first_time',
-                'Application for a Provident Loan (10K-100K) - old applicant': 'div_attachment_old_applicant',
-                'Application for a Provident Loan (Additional 100K)': 'div_attachment_additional',
-                'Status of Application': 'div_attachment_status',
-                'Statement of Account': 'div_attachment_statement',
-                'Request for Provident Loan Accountability Clearance': 'div_attachment_clearance'
-            };
-            
-            const allAttachmentDivs = Object.values(fieldMap).map(id => document.getElementById(id)).filter(Boolean);
-
-            function toggleProvidentFields() {
-                const selectedValue = providentQuerySelect.value;
-                allAttachmentDivs.forEach(div => div.style.display = 'none');
-                
-                const divToShowId = fieldMap[selectedValue];
-                if (divToShowId) {
-                    const divToShow = document.getElementById(divToShowId);
-                    if (divToShow) {
-                        divToShow.style.display = 'block';
+            if (otherInputDiv) {
+                const toggleVisibility = () => {
+                    if (selectElement.value === 'Other') {
+                        otherInputDiv.style.display = 'block';
+                    } else {
+                        otherInputDiv.style.display = 'none';
                     }
-                }
+                };
+                
+                // Run on page load
+                toggleVisibility();
+                
+                // Run on change
+                selectElement.addEventListener('change', toggleVisibility);
             }
-            toggleProvidentFields();
-            providentQuerySelect.addEventListener('change', toggleProvidentFields);
-        }
+        });
     });
 </script>
 {% endblock content %}
+

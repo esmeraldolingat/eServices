@@ -38,7 +38,7 @@ class LoginForm(FlaskForm):
 class EditUserForm(FlaskForm):
     name = StringField('Full Name', validators=[DataRequired()])
     email = StringField('Email Address', validators=[DataRequired(), Email()])
-    role = SelectField('Role', choices=[('User', 'User'), ('Admin', 'Admin')], validators=[DataRequired()])
+    role = SelectField('Role', choices=[('User', 'User'), ('Staff', 'Staff'), ('Admin', 'Admin')], validators=[DataRequired()])
     submit = SubmitField('Update User')
 
 class AddAuthorizedEmailForm(FlaskForm):
@@ -92,8 +92,6 @@ class UpdateTicketForm(FlaskForm):
     status = SelectField('Update Status', choices=[('Open', 'Open'), ('In Progress', 'In Progress'), ('Resolved', 'Resolved')], validators=[DataRequired()])
     attachment = FileField('Add Attachment (Optional)', validators=[Optional(), FileAllowed(['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'], 'Allowed file types are: pdf, images, word docs')])
     submit = SubmitField('Submit Update')
-
-
 
 # ======================================================
 # === ICT DEPARTMENT FORMS =============================

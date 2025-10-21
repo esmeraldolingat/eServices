@@ -14,110 +14,136 @@
         {% endif %}
     </div>
 
-    <!-- Main Ticket Information Card -->
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h3>Ticket #{{ ticket.ticket_number }}</h3>
-            {% if ticket.status == 'Open' %}
-                <span class="badge bg-success">{{ ticket.status }}</span>
-            {% elif ticket.status == 'In Progress' %}
-                <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
-            {% else %}
-                <span class="badge bg-secondary">{{ ticket.status }}</span>
-            {% endif %}
-        </div>
-        <div class="card-body">
-            <h5 class="card-title">{{ ticket.service_type.name }}</h5>
-            <p class="card-text">
-                <strong>Department:</strong> {{ ticket.ticket_department.name }}<br>
-                <strong>Requester:</strong> {{ ticket.requester_name }} ({{ ticket.requester_email }})<br>
-                <strong>School/Office:</strong> {{ ticket.school.name }}<br>
-                <strong>Submitted On:</strong> {{ ticket.date_posted.strftime('%B %d, %Y at %I:%M %p') }}
-            </p>
-            <hr>
-            <h6>Request Details:</h6>
-            {% if ticket.details %}
-                {% for key, value in ticket.details.items() %}
-                    <p class="card-text mb-1">
-                        <strong>{{ key.replace('_', ' ').title() }}:</strong> 
-                        {{ value or 'N/A' }}
-                    </p>
-                {% endfor %}
-            {% else %}
-                <p class="card-text">No additional details provided.</p>
-            {% endif %}
-
-            {% if ticket.attachments %}
-            <hr>
-            <h6>Attachments:</h6>
-            <ul>
-                {% for attachment in ticket.attachments %}
-                    <li><a href="{{ url_for('static', filename='uploads/' + attachment.filename) }}" target="_blank">{{ attachment.filename }}</a></li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Responses/Comments Section -->
-    <div class="mt-4">
-        <h4>Responses</h4>
-        <hr>
-        {% if ticket.responses %}
-            {% for response in ticket.responses %}
-            <div class="card mb-3">
+    <div class="row g-4">
+        <!-- Left Column: Ticket Details and Responses -->
+        <div class="col-lg-8">
+            <!-- Main Ticket Information Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-ticket-detailed-fill me-2"></i>Ticket #{{ ticket.ticket_number }}</h5>
+                    {% if ticket.status == 'Open' %}
+                        <span class="badge bg-success">{{ ticket.status }}</span>
+                    {% elif ticket.status == 'In Progress' %}
+                        <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ ticket.status }}</span>
+                    {% endif %}
+                </div>
                 <div class="card-body">
-                    <p class="card-text">{{ response.body | safe }}</p>
-                </div>
-                <div class="card-footer text-muted small">
-                    by {{ response.author.name }} on {{ response.date_posted.strftime('%Y-%m-%d %H:%M') }}
+                    <h6 class="card-subtitle mb-2 text-muted">{{ ticket.service_type.name }}</h6>
+                    <hr>
+                    <p class="card-text mb-1"><strong>Department:</strong> {{ ticket.ticket_department.name }}</p>
+                    <p class="card-text mb-1"><strong>Requester:</strong> {{ ticket.requester_name }} ({{ ticket.requester_email }})</p>
+                    <p class="card-text mb-1"><strong>School/Office:</strong> {{ ticket.school.name }}</p>
+                    <p class="card-text mb-1"><strong>Submitted On:</strong> {{ ticket.date_posted.strftime('%B %d, %Y at %I:%M %p') }}</p>
                 </div>
             </div>
-            {% endfor %}
-        {% else %}
-            <p>No responses yet.</p>
-        {% endif %}
-    </div>
 
-    <!-- Add a Response Form (with logic to hide if resolved) -->
-    {% if ticket.status != 'Resolved' or is_staff_or_admin %}
-    <div class="mt-4">
-        <h4>Add a Response / Update Status</h4>
-        <hr>
-        <form method="POST" action="" enctype="multipart/form-data">
-            {{ form.hidden_tag() }}
-            
-            {% if form.status %}
-            <div class="mb-3">
-                {{ form.status.label(class="form-label") }}
-                {{ form.status(class="form-select") }}
+            <!-- Request Specifics Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Request Details</h6>
+                </div>
+                <div class="card-body">
+                    {% if ticket.details %}
+                        {% for key, value in ticket.details.items() %}
+                            {# Logic para itago ang 'Other' field kung hindi kailangan #}
+                            {% if 'other' in key and ticket.details.get(key.replace('_other', '')) != 'Other' %}
+                                <!-- Huwag ipakita ang 'other' field kung hindi 'Other' ang pinili -->
+                            {% elif value and value != 'N/A' %}
+                                <p class="card-text mb-2">
+                                    <strong>{{ key.replace('_', ' ').title() }}:</strong> 
+                                    {{ value }}
+                                </p>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <p class="card-text">No additional details provided.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Attachments Card -->
+            {% if ticket.attachments %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-paperclip me-2"></i>Attachments</h6>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for attachment in ticket.attachments %}
+                        <li class="list-group-item">
+                            <a href="{{ url_for('static', filename='uploads/' + attachment.filename) }}" target="_blank">{{ attachment.filename }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
             </div>
             {% endif %}
 
-            <div class="mb-3">
-                {{ form.body.label(class="form-label") }}
-                {{ form.body(class="form-control", rows="5") }}
-            </div>
-
-            <div class="mb-3">
-                {{ form.attachment.label(class="form-label") }}
-                {{ form.attachment(class="form-control") }}
-                {% for error in form.attachment.errors %}
-                    <div class="text-danger small mt-1">{{ error }}</div>
+            <!-- Responses/Comments Section -->
+            <h4 class="mb-3"><i class="bi bi-chat-dots-fill me-2"></i>Conversation History</h4>
+            {% if ticket.responses %}
+                {% for response in ticket.responses %}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <p class="card-text">{{ response.body | safe }}</p>
+                    </div>
+                    <div class="card-footer text-muted small">
+                        by <strong>{{ response.author.name }}</strong> on {{ response.date_posted.strftime('%B %d, %Y at %I:%M %p') }}
+                    </div>
+                </div>
                 {% endfor %}
-            </div>
+            {% else %}
+                <div class="alert alert-light" role="alert">
+                    No responses yet.
+                </div>
+            {% endif %}
+        </div>
 
-            <div class="mb-3">
-                {{ form.submit(class="btn btn-primary") }}
-            </div>
-        </form>
-    </div>
-    {% else %}
-    <div class="alert alert-info mt-4" role="alert">
-        This ticket has been resolved and is now closed for comments.
-    </div>
-    {% endif %}
+        <!-- Right Column: Action Form -->
+        <div class="col-lg-4">
+            <!-- Add a Response Form (with logic to hide if resolved) -->
+            {% if ticket.status != 'Resolved' or is_staff_or_admin %}
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Take Action</h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="" enctype="multipart/form-data">
+                        {{ form.hidden_tag() }}
+                        
+                        {% if form.status %}
+                        <div class="mb-3">
+                            {{ form.status.label(class="form-label") }}
+                            {{ form.status(class="form-select") }}
+                        </div>
+                        {% endif %}
 
+                        <div class="mb-3">
+                            {{ form.body.label(class="form-label") }}
+                            {{ form.body(class="form-control", rows="5") }}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.attachment.label(class="form-label") }}
+                            {{ form.attachment(class="form-control") }}
+                            {% for error in form.attachment.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="d-grid">
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info mt-4" role="alert">
+                This ticket has been resolved and is now closed for comments.
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock content %}
 

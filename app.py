@@ -43,6 +43,66 @@ UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
+app.config['TICKETS_PER_PAGE'] = 10
+
+# --- Email Configuration ---
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+
+# --- Extensions ---
+db.init_app(app)
+migrate = Migrate(app, db)
+login_manager = LoginManager()
+login_manager.init_app(app)
+import os
+import json
+from datetime import datetime, timezone
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_migrate import Migrate
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.utils import secure_filename
+from flask_mail import Mail, Message
+from functools import wraps
+import csv
+import io
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- IMPORTS FROM OUR PROJECT FILES ---
+from models import db, User, Department, Service, School, Ticket, Attachment, Response, CannedResponse, AuthorizedEmail
+from forms import (
+    DepartmentSelectionForm, ServiceSelectionForm, GeneralTicketForm, LoginForm,
+    IssuanceForm, RepairForm, EmailAccountForm, DpdsForm, DcpForm, OtherIctForm,
+    LeaveApplicationForm, CoeForm, ServiceRecordForm, GsisForm, NoPendingCaseForm,
+    LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
+    ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
+    ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm,
+    UpdateTicketForm
+)
+
+# --- App Initialization and Config ---
+app = Flask(__name__)
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+app.secret_key = os.getenv('SECRET_KEY')
+
+instance_path = os.path.join(basedir, 'instance')
+os.makedirs(instance_path, exist_ok=True)
+db_filename = os.getenv('DATABASE_FILENAME', 'eservices.db')
+db_path = os.path.join(instance_path, db_filename)
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
+app.config['TICKETS_PER_PAGE'] = 10
 
 # --- Email Configuration ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -80,6 +140,66 @@ def admin_required(f):
 # === HELPER FUNCTIONS ============================================
 # =================================================================
 
+def send_new_ticket_email(ticket):
+    details_text = "\n".join([f"- {key.replace('_', ' ').title()}: {value}" for key, value in ticket.details.items()])
+    msg = Message(f'New Ticket Created: #{ticket.ticket_number}',
+                  sender=('TCSD e-Services', app.config['MAIL_USERNAME']),
+                  recipients=[ticket.requester_email])
+    msg.body = f'''
+Hi {ticket.requester_name},
+
+This is to confirm that we have successfully received your request.
+
+Ticket Number: {ticket.ticket_number}
+Department: {ticket.ticket_department.name}
+Service Requested: {ticket.service_type.name}
+
+Request Details:
+{details_text}
+
+Our team will review your request and get back to you shortly. You can view the status of this ticket in your "My Tickets" dashboard.
+
+Thank you,
+TCSD e-Services Team
+'''
+    mail.send(msg)
+
+def send_staff_notification_email(ticket, response):
+    """Emails assigned staff and admins about a new user response."""
+    recipients = {manager.email for manager in ticket.service_type.managers}
+    
+    admins = User.query.filter_by(role='Admin').all()
+    for admin in admins:
+        recipients.add(admin.email)
+
+    if not recipients:
+        return
+
+    msg = Message(f'New Response on Ticket #{ticket.ticket_number}',
+                  sender=('TCSD e-Services', app.config['MAIL_USERNAME']),
+                  recipients=list(recipients))
+    msg.body = f'''
+Hi Team,
+
+A new response has been added to Ticket #{ticket.ticket_number} by the requester.
+
+Ticket Details:
+- Service: {ticket.service_type.name}
+- Requester: {ticket.requester_name}
+
+New Response:
+--------------------------------------------------
+{response.body}
+--------------------------------------------------
+
+You can view the ticket here:
+{url_for('ticket_detail', ticket_id=ticket.id, _external=True)}
+
+Thank you,
+e-Services Notifier
+'''
+    mail.send(msg)
+
 def send_reset_email(user):
     token = user.get_reset_token()
     msg = Message('Password Reset Request', sender=('TCSD e-Services', app.config['MAIL_USERNAME']), recipients=[user.email])
@@ -97,7 +217,7 @@ def send_resolution_email(ticket, response_body):
     msg.body = f'''
 Hi {ticket.requester_name},
 
-Your ticket with the number #{ticket.ticket_number} regarding "{ticket.service_type.name}" has been marked as RESOLVED.
+Your ticket #{ticket.ticket_number} regarding "{ticket.service_type.name}" has been marked as RESOLVED.
 
 Here is the final response from our team:
 --------------------------------------------------
@@ -165,7 +285,7 @@ def create_admin():
 @login_required
 def home():
     """Redirects user to the appropriate dashboard based on their role and permissions."""
-    if current_user.role == 'Admin' or current_user.managed_services.count() > 0:
+    if current_user.role == 'Admin' or current_user.role == 'Staff':
         return redirect(url_for('staff_dashboard'))
     else:
         return redirect(url_for('my_tickets'))
@@ -174,24 +294,38 @@ def home():
 @login_required
 def staff_dashboard():
     """Shows tickets for services managed by the current staff user."""
-    managed_service_ids = [service.id for service in current_user.managed_services]
-    if current_user.role == 'Admin':
-        tickets = Ticket.query.order_by(Ticket.date_posted.desc()).all()
-        title = "All System Tickets"
-    elif managed_service_ids:
-        tickets = Ticket.query.filter(Ticket.service_id.in_(managed_service_ids)).order_by(Ticket.date_posted.desc()).all()
-        title = "My Managed Tickets"
-    else:
-        tickets = []
-        title = "My Managed Tickets"
-        flash("You are not assigned to manage any services.", "info")
-    return render_template('staff_dashboard.html', tickets=tickets, title=title)
+    page_active = request.args.get('page_active', 1, type=int)
+    page_resolved = request.args.get('page_resolved', 1, type=int)
+    
+    base_query = Ticket.query
+    
+    if current_user.role == 'Staff':
+        managed_service_ids = [service.id for service in current_user.managed_services]
+        if managed_service_ids:
+            base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
+        else:
+            flash("You are a Staff member but are not assigned to any services. Please contact an administrator.", "warning")
+            return render_template('staff_dashboard.html', active_tickets=None, resolved_tickets=None, title="My Managed Tickets")
+
+    active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+    resolved_tickets = base_query.filter(Ticket.status == 'Resolved').order_by(Ticket.date_posted.desc()).paginate(page=page_resolved, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+    
+    title = "All System Tickets (Admin View)" if current_user.role == 'Admin' else "My Managed Tickets"
+
+    return render_template('staff_dashboard.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, title=title)
 
 @app.route('/my-tickets')
 @login_required
 def my_tickets():
-    tickets = Ticket.query.filter_by(requester_email=current_user.email).order_by(Ticket.date_posted.desc()).all()
-    return render_template('my_tickets.html', tickets=tickets, title='My Tickets')
+    page_active = request.args.get('page_active', 1, type=int)
+    page_resolved = request.args.get('page_resolved', 1, type=int)
+
+    base_query = Ticket.query.filter_by(requester_email=current_user.email)
+    
+    active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+    resolved_tickets = base_query.filter(Ticket.status == 'Resolved').order_by(Ticket.date_posted.desc()).paginate(page=page_resolved, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+
+    return render_template('my_tickets.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, title='My Tickets')
 
 @app.route('/ticket/<int:ticket_id>', methods=['GET', 'POST'])
 @login_required
@@ -450,10 +584,10 @@ def create_ticket_form(service_id):
         details_data = {}
         general_fields = {field.name for field in GeneralTicketForm()}
         for field in form:
-            if field.name not in general_fields:
+            if field.name not in general_fields and field.type not in ['FileField', 'CSRFTokenField', 'SubmitField']:
                 if field.type == 'DateField':
                     details_data[field.name] = field.data.strftime('%Y-%m-%d') if field.data else None
-                elif field.type not in ['FileField', 'CSRFTokenField', 'SubmitField']:
+                else:
                     details_data[field.name] = field.data
         saved_filenames = []
         for field in form:
@@ -462,10 +596,14 @@ def create_ticket_form(service_id):
                 filename = secure_filename(f"{field.name}_{file.filename}")
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                 saved_filenames.append(filename)
+
         current_year = datetime.now(timezone.utc).year
-        last_ticket = Ticket.query.order_by(Ticket.id.desc()).first()
+        dept_code_map = {"ICT": "ICT", "Personnel": "PERS", "Legal Services": "LEGAL", "Office of the SDS": "SDS", "Accounting Unit": "ACCT", "Supply Office": "SUP"}
+        dept_code = dept_code_map.get(service.department.name, "GEN")
+        last_ticket = Ticket.query.filter(Ticket.ticket_number.like(f'{dept_code}-{current_year}-%')).order_by(Ticket.id.desc()).first()
         new_sequence = (int(last_ticket.ticket_number.split('-')[-1]) + 1) if last_ticket else 1
-        new_ticket_number = f'TCSD-{current_year}-{new_sequence:04d}'
+        new_ticket_number = f'{dept_code}-{current_year}-{new_sequence:04d}'
+
         new_ticket = Ticket(
             ticket_number=new_ticket_number,
             requester_name=form.requester_name.data,
@@ -479,10 +617,13 @@ def create_ticket_form(service_id):
         )
         db.session.add(new_ticket)
         db.session.commit()
+
         for fname in saved_filenames:
             db.session.add(Attachment(filename=fname, ticket_id=new_ticket.id))
         db.session.commit()
-        flash(f'Your ticket has been created! Your ticket number is {new_ticket_number}.', 'success')
+
+        send_new_ticket_email(new_ticket)
+        flash(f'Your ticket has been created! A confirmation has been sent to your email. Your ticket number is {new_ticket_number}.', 'success')
         return redirect(url_for('home'))
     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
