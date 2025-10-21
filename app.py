@@ -255,7 +255,7 @@ def staff_dashboard():
             base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
             summary_query = summary_query.filter(Service.id.in_(managed_service_ids))
         else:
-            flash("You are not assigned to any services. Please contact an administrator.", "warning")
+            flash("You are a Staff member but are not assigned to any services. Please contact an administrator.", "warning")
             return render_template('staff_dashboard.html', active_tickets=None, resolved_tickets=None, dashboard_summary={}, title="My Managed Tickets")
 
     active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
@@ -290,7 +290,6 @@ def staff_dashboard():
     
     title = "System Dashboard"
     return render_template('staff_dashboard.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, dashboard_summary=dashboard_summary, title=title, selected_quarter=selected_quarter)
-
 
 @app.route('/my-tickets')
 @login_required

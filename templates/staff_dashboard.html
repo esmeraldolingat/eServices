@@ -147,14 +147,14 @@
 
     <!-- Dashboard Summary Section -->
     <h4 class="mb-3">Ticket Summary by Department</h4>
-    <div class="row">
-        {% for dept_name, dept_data in dashboard_summary.items() %}
-            <div class="col-lg-6 mb-4">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header">
-                        <h5 class="mb-0">{{ dept_name }}</h5>
-                    </div>
-                    <div class="card-body">
+    {% for dept_name, dept_data in dashboard_summary.items() %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">{{ dept_name }}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
                         {% for service in dept_data.services %}
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between mb-1">
@@ -167,19 +167,20 @@
                                 </div>
                             </div>
                         {% endfor %}
-                        <hr>
-                        <div style="height: {{ dept_data.services|length * 40 }}px;">
+                    </div>
+                    <div class="col-md-6">
+                        <div style="height: {{ dept_data.services|length * 45 + 20 }}px; position: relative;">
                              <canvas class="department-chart" id="chart-{{ loop.index }}"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
-        {% else %}
-            <div class="col">
-                <div class="alert alert-light">No data to display a summary for the selected period.</div>
-            </div>
-        {% endfor %}
-    </div>
+        </div>
+    {% else %}
+        <div class="col">
+            <div class="alert alert-light">No data to display a summary for the selected period.</div>
+        </div>
+    {% endfor %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -229,7 +230,7 @@
                             },
                             title: {
                                 display: true,
-                                text: `Ticket Volume for ${deptName}`
+                                text: `Ticket Volume`
                             }
                         }
                     }
