@@ -65,6 +65,12 @@ class DepartmentForm(FlaskForm):
         if existing_dept:
             raise ValidationError('That department name already exists.')
 
+class CannedResponseForm(FlaskForm):
+    title = StringField('Response Title (e.g., "Password Reset Steps")', validators=[DataRequired()])
+    body = TextAreaField('Response Body (This is the text that will be inserted)', validators=[DataRequired()])
+    department_id = SelectField('Department', coerce=int, validators=[DataRequired()])
+    submit = SubmitField('Save Response')
+
 # ======================================================
 # === TICKET & RESPONSE FORMS ==========================
 # ======================================================
