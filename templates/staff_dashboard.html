@@ -1,11 +1,22 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="container mt-4">
+<div class="container my-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0">{{ title }}</h1>
         <a href="{{ url_for('select_department') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle-fill me-2"></i>Create New Ticket
         </a>
+    </div>
+
+    <!-- Quarter Filter Buttons -->
+    <div class="d-flex justify-content-center mb-4">
+        <div class="btn-group shadow-sm" role="group" aria-label="Quarter filters">
+            <a href="{{ url_for('staff_dashboard', quarter=0) }}" class="btn {% if selected_quarter == 0 %}btn-primary{% else %}btn-outline-primary{% endif %}">All Time</a>
+            <a href="{{ url_for('staff_dashboard', quarter=1) }}" class="btn {% if selected_quarter == 1 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q1</a>
+            <a href="{{ url_for('staff_dashboard', quarter=2) }}" class="btn {% if selected_quarter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q2</a>
+            <a href="{{ url_for('staff_dashboard', quarter=3) }}" class="btn {% if selected_quarter == 3 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q3</a>
+            <a href="{{ url_for('staff_dashboard', quarter=4) }}" class="btn {% if selected_quarter == 4 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q4</a>
+        </div>
     </div>
 
     <!-- Active Tickets Section -->
@@ -50,23 +61,23 @@
             {% endif %}
         </div>
         {% if active_tickets and active_tickets.pages > 1 %}
-        <div class="card-footer">
+        <div class="card-footer bg-light">
             <nav aria-label="Active tickets navigation">
                 <ul class="pagination justify-content-center mb-0">
                     <li class="page-item {% if not active_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page) }}">Previous</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, quarter=selected_quarter) }}">Previous</a>
                     </li>
                     {% for page_num in active_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {% if active_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, quarter=selected_quarter) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
                     <li class="page-item {% if not active_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page) }}">Next</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, quarter=selected_quarter) }}">Next</a>
                     </li>
                 </ul>
             </nav>
@@ -76,7 +87,7 @@
 
     <!-- Resolved Tickets Section -->
     <h4 class="mb-3">Resolved Tickets</h4>
-    <div class="card shadow-sm">
+    <div class="card shadow-sm mb-5">
          <div class="card-body">
             {% if resolved_tickets and resolved_tickets.items %}
             <div class="table-responsive">
@@ -110,29 +121,122 @@
             {% endif %}
         </div>
         {% if resolved_tickets and resolved_tickets.pages > 1 %}
-        <div class="card-footer">
+        <div class="card-footer bg-light">
              <nav aria-label="Resolved tickets navigation">
                 <ul class="pagination justify-content-center mb-0">
                     <li class="page-item {% if not resolved_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.prev_num) }}">Previous</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.prev_num, quarter=selected_quarter) }}">Previous</a>
                     </li>
                     {% for page_num in resolved_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {% if resolved_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page, page_resolved=page_num) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=page_num, quarter=selected_quarter) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
                     <li class="page-item {% if not resolved_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.next_num) }}">Next</a>
+                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.next_num, quarter=selected_quarter) }}">Next</a>
                     </li>
                 </ul>
             </nav>
         </div>
         {% endif %}
     </div>
+
+    <!-- Dashboard Summary Section -->
+    <h4 class="mb-3">Ticket Summary by Department</h4>
+    <div class="row">
+        {% for dept_name, dept_data in dashboard_summary.items() %}
+            <div class="col-lg-6 mb-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header">
+                        <h5 class="mb-0">{{ dept_name }}</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for service in dept_data.services %}
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>{{ service.name }}</span>
+                                    <strong>{{ service.resolved }} / {{ service.total }} <span class="text-muted">Resolved</span></strong>
+                                </div>
+                                <div class="progress" style="height: 10px;">
+                                    {% set percentage = (service.resolved / service.total * 100) if service.total > 0 else 0 %}
+                                    <div class="progress-bar" role="progressbar" style="width: {{ percentage }}%; background-color: {{ service.color }};" aria-valuenow="{{ percentage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                        <hr>
+                        <div style="height: {{ dept_data.services|length * 40 }}px;">
+                             <canvas class="department-chart" id="chart-{{ loop.index }}"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="col">
+                <div class="alert alert-light">No data to display a summary for the selected period.</div>
+            </div>
+        {% endfor %}
+    </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const summaryData = {{ dashboard_summary | tojson | safe }};
+        if (summaryData) {
+            const departmentNames = Object.keys(summaryData);
+
+            departmentNames.forEach((deptName, index) => {
+                const canvasId = `chart-${index + 1}`;
+                const ctx = document.getElementById(canvasId);
+                if (!ctx) return;
+
+                const deptData = summaryData[deptName];
+                const serviceNames = deptData.services.map(s => s.name);
+                const totalData = deptData.services.map(s => s.total);
+                const serviceColors = deptData.services.map(s => s.color);
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: serviceNames,
+                        datasets: [{
+                            label: 'Total Tickets',
+                            data: totalData,
+                            backgroundColor: serviceColors.map(c => `${c}B3`), // Add alpha for transparency
+                            borderColor: serviceColors,
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0 // Show whole numbers only
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: true,
+                                text: `Ticket Volume for ${deptName}`
+                            }
+                        }
+                    }
+                });
+            });
+        }
+    });
+</script>
 {% endblock content %}
 
