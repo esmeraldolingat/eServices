@@ -1,7 +1,7 @@
 import os
 import json
 from datetime import datetime, timezone
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, Response
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -11,13 +11,16 @@ from functools import wraps
 import csv
 import io
 from dotenv import load_dotenv
-from sqlalchemy import func, case, extract
+from sqlalchemy import func, case, extract, or_
 from sqlalchemy.orm import joinedload
 
 load_dotenv()
 
 # --- IMPORTS FROM OUR PROJECT FILES ---
-from models import db, User, Department, Service, School, Ticket, Attachment, Response, CannedResponse, AuthorizedEmail
+from models import (
+    db, User, Department, Service, School, Ticket, Attachment, Response as TicketResponse,
+    CannedResponse, AuthorizedEmail, PersonalCannedResponse
+)
 from forms import (
     DepartmentSelectionForm, ServiceSelectionForm, GeneralTicketForm, LoginForm,
     IssuanceForm, RepairForm, EmailAccountForm, DpdsForm, DcpForm, OtherIctForm,
@@ -25,7 +28,7 @@ from forms import (
     LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
     ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm,
-    UpdateTicketForm, CannedResponseForm
+    UpdateTicketForm, CannedResponseForm, PersonalCannedResponseForm
 )
 
 # --- App Initialization and Config ---
@@ -46,6 +49,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024
 app.config['TICKETS_PER_PAGE'] = 10
+app.config['EMAILS_PER_PAGE'] = 50
 
 # --- Email Configuration ---
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -105,15 +109,20 @@ Our team will review your request and get back to you shortly. You can view the 
 Thank you,
 TCSD e-Services Team
 '''
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending new ticket email: {e}")
 
 def send_staff_notification_email(ticket, response):
     recipients = {manager.email for manager in ticket.service_type.managers}
     admins = User.query.filter_by(role='Admin').all()
     for admin in admins:
         recipients.add(admin.email)
+    
     if not recipients:
         return
+
     msg = Message(f'New Response on Ticket #{ticket.ticket_number}',
                   sender=('TCSD e-Services', app.config['MAIL_USERNAME']),
                   recipients=list(recipients))
@@ -136,7 +145,10 @@ You can view the ticket here:
 Thank you,
 e-Services Notifier
 '''
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending staff notification email: {e}")
 
 def send_reset_email(user):
     token = user.get_reset_token()
@@ -145,7 +157,10 @@ def send_reset_email(user):
 {url_for('reset_token', token=token, _external=True)}
 If you did not make this request then simply ignore this email and no changes will be made.
 '''
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending reset email: {e}")
 
 def send_resolution_email(ticket, response_body):
     msg = Message(f'Update on your Ticket: #{ticket.ticket_number} - RESOLVED',
@@ -162,7 +177,11 @@ If you have further questions, please create a new ticket.
 Thank you,
 TCSD e-Services Team
 '''
-    mail.send(msg)
+    try:
+        mail.send(msg)
+    except Exception as e:
+        print(f"Error sending resolution email: {e}")
+
 
 # =================================================================
 # === CLI COMMANDS ================================================
@@ -172,7 +191,10 @@ TCSD e-Services Team
 def seed_db():
     """Populates the database with initial data and canned responses."""
     
-    # Seed Departments
+    db.session.query(CannedResponse).delete()
+    db.session.commit()
+    print("Old canned responses cleared.")
+
     print("Seeding Departments...")
     DEPARTMENTS = ["ICT", "Personnel", "Legal Services", "Office of the SDS", "Accounting Unit", "Supply Office"]
     for dept_name in DEPARTMENTS:
@@ -180,7 +202,6 @@ def seed_db():
     db.session.commit()
     print("Departments seeded.")
 
-    # Seed Services
     print("Seeding Services...")
     SERVICES = { "ICT": ["Issuances and Online Materials", "Repair, Maintenance and Troubleshoot of IT Equipment", "DepEd Email Account", "DPDS - DepEd Partnership Database System", "DCP - DepEd Computerization Program: After-sales", "other ICT - Technical Assistance Needed"], "Personnel": ["Application for Leave of Absence", "Certificate of Employment", "Service Record", "GSIS BP Number"], "Legal Services": ["Certificate of NO-Pending Case"], "Office of the SDS": ["Request for Approval of Locator Slip", "Request for Approval of Authority to Travel", "Request for Designation of Officer-in-Charge at the School", "Request for Substitute Teacher", "Alternative Delivery Mode"], "Accounting Unit": ["DepEd TCSD Provident Fund"], "Supply Office": ["Submission of Inventory Custodian Slip – ICS"] }
     for dept_name, service_list in SERVICES.items():
@@ -191,15 +212,13 @@ def seed_db():
     db.session.commit()
     print("Services seeded.")
 
-    # Seed Schools
     print("Seeding Schools...")
-    SCHOOLS = [ "Alvindia Aguso Central ES", "Alvindia Aguso HS", "Alvindia ES", "Amucao ES", "Amucao HS", "Apalang ES", "Armenia IS", "Asturias ES", "Atioc Dela Paz ES", "Bacuit ES", "Bagong Barrio ES", "Balanti ES", "Balanti HS", "Balete ES", "Balibago Primero IS", "Balingcanaway Centro ES", "Balingcanaway Corba ES", "Banaba ES", "Bantog ES", "Baras-Baras ES", "Baras-Baras HS", "Batang-Batang IS", "Binauganan ES", "Buenavista ES", "Buhilit ES", "Burot IS", "Camp Aquino ES", "Capehan ES", "Capulong ES", "Carangian ES", "Care ES", "CAT ES", "CAT HS Annex", "CAT HS Main", "Cut Cut ES", "Dalayap ES", "Damaso Briones ES", "Dolores ES", "Don Florencio P. Buan ES", "Don Pepe Cojuangco ES", "Doña Arsenia ES", "Felicidad Magday ES", "Laoang ES", "Lourdes ES", "Maligaya ES", "Maliwalo CES", "Maliwalo National HS", "Mapalacsiao ES", "Mapalad ES", "Margarita Briones Soliman ES", "Matatalaib Bato ES", "Matatalaib Buno ES", "Matatalaib HS", "Natividad De Leon ES", "Northern Hill ES Annex", "Northern Hill ES Main", "Pag-asa ES", "Paquillao ES", "Paradise ES", "Paraiso ES", "Samberga ES", "San Carlos ES", "San Francisco ES", "San Isidro ES", "San Jose De Urquico ES", "San Jose ES", "San Juan Bautista ES", "San Juan De Mata ES", "San Juan De Mata HS", "San Manuel ES", "San Manuel HS", "San Miguel CES", "San Nicolas ES", "San Pablo ES", "San Pascual ES", "San Rafael ES", "San Sebastian ES", "San Vicente ES Annex", "San Vicente ES Main", "Sapang Maragul IS", "Sapang Tagalog ES", "Sepung Calzada Panampunan ES", "Sinait IS", "Sitio Dam ES", "Sta. Cruz ES", "Sta. Maria ES", "Sto. Cristo IS", "Sto. Domingo ES", "Sto. Niño ES", "Suizo Bliss ES", "Suizo Resettlement ES", "Tariji ES", "Tarlac West CES", "Tibag ES", "Tibag HS", "Trinidad ES", "Ungot IS", "Villa Bacolor ES", "Yabutan ES", "Division Office" ]
+    SCHOOLS = [ "Alvindia Aguso Central ES", "Alvindia Aguso HS", "Alvindia ES", "Amucao ES", "Amucao HS", "Apalang ES", "Armenia IS", "Asturias ES", "Atioc Dela Paz ES", "Bacuit ES", "Bagong Barrio ES", "Balanti ES", "Balanti HS", "Balete ES", "Balibago Primero IS", "Balingcanaway Centro ES", "Balingcanaway Corba ES", "Banaba ES", "Bantog ES", "Baras-Baras ES", "Baras-Baras HS", "Batang-Batang IS", "Binauganan ES", "Buenavista ES", "Buhilit ES", "Burot IS", "Camp Aquino ES", "Capehan ES", "Capulong ES", "Carangian ES", "Care ES", "CAT ES", "CAT HS Annex", "CAT HS Main", "Cut Cut ES", "Dalayap ES", "Damaso Briones ES", "Dolores ES", "Don Florencio P. Buan ES", "Don Pepe Cojuangco ES", "Doña Arsenia ES", "Felicidad Magday ES", "Laoang ES", "Lourdes ES", "Maligaya ES", "Maliwalo CES", "Maliwalo National HS", "Mapalacsiao ES", "Mapalad ES", "Margarita Briones Soliman ES", "Matatalaib Bato ES", "Matatalaib Buno ES", "Matatalaib HS", "Natividad De Leon ES", "Northern Hill ES Annex", "Northern Hill ES Main", "Pag-asa ES", "Paquillao ES", "Paradise ES", "Paraiso ES", "Samberga ES", "San Carlos ES", "San Francisco ES", "San Isidro ES", "San Jose De Urquico ES", "San Jose ES", "San Juan Bautista ES", "San Juan De Mata ES", "San Juan De Mata HS", "San Manuel ES", "San Manuel HS", "San Miguel CES", "San Nicolas ES", "San Pablo ES", "San Pascual ES", "San Rafael ES", "San Sebastian ES", "San Vicente ES Annex", "San Vicente ES Main", "Sapang Maragul IS", "Sapang Tagalog ES", "Sepung Calzada Panampunan ES", "Sinait IS", "Sitio Dam ES", "Sta. Cruz ES", "Sta.Maria ES", "Sto. Cristo IS", "Sto. Domingo ES", "Sto. Niño ES", "Suizo Bliss ES", "Suizo Resettlement ES", "Tariji ES", "Tarlac West CES", "Tibag ES", "Tibag HS", "Trinidad ES", "Ungot IS", "Villa Bacolor ES", "Yabutan ES", "Division Office" ]
     for school_name in SCHOOLS:
         if not School.query.filter_by(name=school_name).first(): db.session.add(School(name=school_name))
     db.session.commit()
     print("Schools seeded.")
 
-    # Seed Authorized Emails
     print("Seeding Authorized Emails...")
     AUTHORIZED_EMAILS = ['icts.tarlaccity@deped.gov.ph', 'esmeraldo.lingat@deped.gov.ph', 'pedro.penduko@deped.gov.ph', 'admin@deped.gov.ph']
     for email_address in AUTHORIZED_EMAILS:
@@ -208,70 +227,36 @@ def seed_db():
     db.session.commit()
     print("Authorized emails seeded.")
 
-    # Seed Canned Responses
     print("Seeding Canned Responses...")
-    CANNED_RESPONSES = {
-        "ICT": [
-            ("Transaction Completed", "Your transaction was already processed and completed. We will now close this ticket. Thank you."),
-            ("Files Posted Online", "The files you uploaded have already been posted on the Division Website. Thank you."),
-            ("Temp Password - Google", "Use your temporary password to sign in to your DepEd Google account at Gmail.com"),
-            ("Temp Password - Microsoft", "Use your temporary password to sign in to your DepEd Microsoft account on Office.com"),
-            ("Temp Password - DPDS", "Use your temporary password to sign in to your official school email address at partnershipsdatabase.deped.gov.ph"),
-            ("Sent to Central Office", "Your request has been sent to the DepEd Central Office. Please wait for further instructions. Thank you."),
-            ("2FA Disabled", "The two-factor authentication has been successfully disabled. You can now access the provided email account using the same password that was previously set."),
-            ("Missing Email - 2FA", "Please provide the email address for which you wish to remove two-factor authentication. Thank you."),
-            ("Missing Email - Reset", "Kindly provide the DepEd email address you wish to have reset by the ICTU. Thank you."),
-            ("Google Account Required", "A DepEd Google account is required to create a Microsoft account. Kindly provide the DepEd Google account. Thank you."),
-            ("Invalid Attachment", "Please use valid attachment as proof for the newly hired teacher. Thank you."),
-            ("Pending Activation", "The activation of the DepEd email account is pending and that the recipient should wait for the Central Office to handle the activation process. Thank you"),
-            ("Storage Warning", "Please ensure that your Google Drive storage does not exceed the maximum allocation of 100GB per person. Exceeding this limit will result in the suspension of Google Apps usage, so please free up space accordingly."),
-            ("Account Disabled", "Your account has been disabled by admin. To reactivate: 1. Visit Division Office (ICTU) for assistance or call Esmeraldo Lingat: (045) 982 4514. Thank you."),
-            ("Account Already Active", "The DepEd email account you provided is already activated. We cannot make any changes to this account. Thank you."),
-            ("Canva Account Info", "If you want to use Canva, you need to link your Microsoft account to it. However, if your Microsoft account is not working, you may have used the wrong account, or if the account is correct, you might have forgotten the password. To resolve this issue, please ask your school ICT Coordinator to request a password reset from the Division ICT Unit (ICTU). Thank you.")
-        ],
-        "Personnel": [
-            ("Leave Approved", "Your application for leave of absence has been duly approved. You may either retrieve the document in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division. Additionally, a soft copy is provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."),
-            ("Affix Signature - Form 6", "Kindly request the school head to affix their signature to your Form 6 for official validation."),
-            ("COE Approved", "Your requested Certificate of Employment has been duly prepared and signed. You may either retrieve it in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."),
-            ("SR Approved (Hard Copy)", "Your requested Service Record has been duly prepared and signed. You may either retrieve it in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division."),
-            ("SR Approved (Soft Copy)", "Your requested Service Record has been duly prepared and signed. You may access the soft copy by signing in to your school account through TCSD e-Services."),
-            ("GSIS BP Created", "Your BP number has been duly created. Please check."),
-            ("GSIS BP Updated", "Your BP number has been duly updated. Please check.")
-        ],
-        "Legal Services": [
-            ("No Pending Case Approved", "This serves to formally notify you that your request for a No Pending Case Certification has been duly approved. You may collect the document in person or, alternatively, coordinate with the Administrative Officer of your school to facilitate its release from the Division Records Office. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.")
-        ],
-        "Office of the SDS": [
-            ("Locator Slip Approved", "Your Locator Slip has been duly approved. You may access the document by signing in to your school account through TCSD e-Services."),
-            ("Authority to Travel Approved", "Your request for Authority to Travel has been duly approved. You may retrieve the document in person or coordinate with the Administrative Officer at your school to facilitate its release from the Division Records Office. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."),
-            ("OIC Request Forwarded", "Your request for the Designation of an Officer-in-Charge at your School has been forwarded to the Personnel Unit for processing. Thank you."),
-            ("ADM Request Forwarded", "Your request for the Alternative Delivery Mode at your School has been forwarded to the Personnel Unit for processing. Thank you."),
-            ("Substitute Teacher Fowarded", "Your request for a Substitute Teacher at your school has been forwarded to the Personnel Unit for processing. Thank you.")
-        ],
-        "Accounting Unit": [
-            ("Provident Fund Processing", "Your DepEd TCSD Provident Fund application is currently being processed. The application will proceed upon the availability of funds."),
-            ("Provident Fund SOA Ready", "Your DepEd TCSD Provident Fund Statement of Account has been duly prepared and signed. You may retrieve it in person or coordinate with your school's Administrative Officer for its release Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."),
-            ("Provident Fund Clearance Ready", "Your request for a Provident Loan Accountability Clearance has been duly prepared and signed. You may retrieve it in person or coordinate with your school's Administrative Officer for its release. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.")
-        ],
-        "Supply Office": [
-            ("ICS Approved", "Your submission of the Inventory Custodian Slip (ICS) has been reviewed, approved, and duly signed. Kindly refer to the soft copy provided in TCSD e-Services by signing in to your school account. This shall serve as your official copy for school inventory records.")
-        ]
+    CANNED_RESPONSES_BY_DEPT = {
+        "ICT": [ ("Transaction Completed", "Your transaction was already processed and completed. We will now close this ticket. Thank you."), ("Files Posted Online", "The files you uploaded have already been posted on the Division Website. Thank you."), ],
+        "Legal Services": [ ("No Pending Case Approved", "This serves to formally notify you that your request for a No Pending Case Certification has been duly approved. You may collect the document in person or, alternatively, coordinate with the Administrative Officer of your school to facilitate its release from the Division Records Office. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.") ],
     }
-
-    for dept_name, responses_list in CANNED_RESPONSES.items():
+    for dept_name, responses_list in CANNED_RESPONSES_BY_DEPT.items():
         dept = Department.query.filter_by(name=dept_name).first()
         if dept:
             for title, body in responses_list:
-                if not CannedResponse.query.filter_by(title=title, department_id=dept.id).first():
-                    db.session.add(CannedResponse(title=title, body=body, department_id=dept.id))
+                db.session.add(CannedResponse(title=title, body=body, department_id=dept.id, service_id=None))
     db.session.commit()
-    print("Canned responses seeded.")
-    
+    print("Department-level canned responses seeded.")
+
+    CANNED_RESPONSES_BY_SERVICE = {
+        "Application for Leave of Absence": [ ("Leave Approved (with Soft Copy)", "Your application for leave of absence has been duly approved. You may either retrieve the document in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division. Additionally, a soft copy is provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."), ("Form 6 - Needs Signature", "Kindly request the school head to affix their signature to your Form 6 for official validation.") ],
+        "Certificate of Employment": [ ("COE Approved (with Soft Copy)", "Your requested Certificate of Employment has been duly prepared and signed. You may either retrieve it in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.") ],
+        "Service Record": [ ("SR Approved (Hard Copy only)", "Your requested Service Record has been duly prepared and signed. You may either retrieve it in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division."), ("SR Approved (Soft Copy only)", "Your requested Service Record has been duly prepared and signed. You may access the soft copy by signing in to your school account through TCSD e-Services.") ],
+        "GSIS BP Number": [ ("GSIS BP Created", "Your BP number has been duly created. Please check."), ("GSIS BP Updated", "Your BP number has been duly updated. Please check.") ]
+    }
+    for service_name, responses_list in CANNED_RESPONSES_BY_SERVICE.items():
+        service = Service.query.filter_by(name=service_name).first()
+        if service:
+            for title, body in responses_list:
+                db.session.add(CannedResponse(title=title, body=body, department_id=service.department_id, service_id=service.id))
+    db.session.commit()
+    print("Service-level canned responses seeded.")
     print("Database seeding complete!")
 
 @app.cli.command("create-admin")
 def create_admin():
-    """Creates a default admin user."""
     if User.query.filter_by(email='admin@deped.gov.ph').first():
         print('Admin user already exists.')
         return
@@ -296,94 +281,207 @@ def home():
 @app.route('/staff-dashboard')
 @login_required
 def staff_dashboard():
+    if current_user.role not in ['Admin', 'Staff']:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('my_tickets'))
+        
     page_active = request.args.get('page_active', 1, type=int)
     page_resolved = request.args.get('page_resolved', 1, type=int)
+    search_query = request.args.get('search', '').strip()
     
     available_years_query = db.session.query(extract('year', Ticket.date_posted)).distinct().order_by(extract('year', Ticket.date_posted).desc())
     available_years = [y[0] for y in available_years_query.all()]
-
     current_year = datetime.utcnow().year
     selected_year = request.args.get('year', current_year, type=int)
-    if not available_years:
-        available_years.append(selected_year)
-    elif selected_year not in available_years:
-        selected_year = available_years[0] # Default to most recent year if invalid year is passed
+    if not available_years: available_years.append(current_year)
+    elif selected_year not in available_years: selected_year = available_years[0]
     
     selected_quarter = request.args.get('quarter', 0, type=int)
     
-    base_query = Ticket.query
-    summary_query = db.session.query(
-        Department.name.label('dept_name'),
-        Service.name.label('service_name'),
-        func.count(Ticket.id).label('total'),
-        func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
-    ).join(Service, Ticket.service_id == Service.id).join(Department, Service.department_id == Department.id)
-
-    base_query = base_query.filter(extract('year', Ticket.date_posted) == selected_year)
-    summary_query = summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
-
-    quarters = {
-        1: (datetime(selected_year, 1, 1), datetime(selected_year, 3, 31, 23, 59, 59)),
-        2: (datetime(selected_year, 4, 1), datetime(selected_year, 6, 30, 23, 59, 59)),
-        3: (datetime(selected_year, 7, 1), datetime(selected_year, 9, 30, 23, 59, 59)),
-        4: (datetime(selected_year, 10, 1), datetime(selected_year, 12, 31, 23, 59, 59)),
-    }
-    if selected_quarter in quarters:
-        start_date, end_date = quarters[selected_quarter]
-        base_query = base_query.filter(Ticket.date_posted.between(start_date, end_date))
-        summary_query = summary_query.filter(Ticket.date_posted.between(start_date, end_date))
+    base_query = Ticket.query.options(db.joinedload(Ticket.school), db.joinedload(Ticket.service_type))
 
     if current_user.role == 'Staff':
         managed_service_ids = [service.id for service in current_user.managed_services]
-        if managed_service_ids:
-            base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
-            summary_query = summary_query.filter(Service.id.in_(managed_service_ids))
-        else:
-            flash("You are a Staff member but are not assigned to any services. Please contact an administrator.", "warning")
-            return render_template('staff_dashboard.html', active_tickets=None, resolved_tickets=None, dashboard_summary={}, title="My Managed Tickets", available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter)
+        if not managed_service_ids:
+            flash("You are not assigned to any services. Please contact an administrator.", "warning")
+            return render_template('staff_dashboard.html', active_tickets=None, resolved_tickets=None, dashboard_summary={}, title="My Managed Tickets", available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter, search_query=search_query)
+        base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
 
-    active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+    if search_query:
+        search_term = f"%{search_query}%"
+        base_query = base_query.join(School, Ticket.school_id == School.id, isouter=True).filter(
+            or_(
+                Ticket.ticket_number.ilike(search_term),
+                Ticket.requester_name.ilike(search_term),
+                School.name.ilike(search_term)
+            )
+        )
+    else:
+        base_query = base_query.filter(extract('year', Ticket.date_posted) == selected_year)
+        quarters = {
+            1: (datetime(selected_year, 1, 1), datetime(selected_year, 3, 31, 23, 59, 59)),
+            2: (datetime(selected_year, 4, 1), datetime(selected_year, 6, 30, 23, 59, 59)),
+            3: (datetime(selected_year, 7, 1), datetime(selected_year, 9, 30, 23, 59, 59)),
+            4: (datetime(selected_year, 10, 1), datetime(selected_year, 12, 31, 23, 59, 59)),
+        }
+        if selected_quarter in quarters:
+            start_date, end_date = quarters[selected_quarter]
+            base_query = base_query.filter(Ticket.date_posted.between(start_date, end_date))
+
+    status_order = case(
+        (Ticket.status == 'Open', 1),
+        (Ticket.status == 'In Progress', 2),
+        else_=3
+    )
+
+    active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(status_order, Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
     resolved_tickets = base_query.filter(Ticket.status == 'Resolved').order_by(Ticket.date_posted.desc()).paginate(page=page_resolved, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
     
-    summary_data = summary_query.group_by(Department.name, Service.name).all()
     dashboard_summary = {}
+    if not search_query:
+        summary_query = db.session.query(
+            Department.name.label('dept_name'),
+            Service.name.label('service_name'),
+            func.count(Ticket.id).label('total'),
+            func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
+        ).join(Service, Ticket.service_id == Service.id).join(Department, Service.department_id == Department.id)
+
+        summary_query = summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
+        
+        if selected_quarter in quarters:
+            start_date, end_date = quarters[selected_quarter]
+            summary_query = summary_query.filter(Ticket.date_posted.between(start_date, end_date))
+
+        if current_user.role == 'Staff':
+            managed_service_ids_for_summary = [service.id for service in current_user.managed_services]
+            summary_query = summary_query.filter(Service.id.in_(managed_service_ids_for_summary))
+        
+        summary_data = summary_query.group_by(Department.name, Service.name).all()
+        
+        if current_user.role == 'Admin':
+            all_departments = Department.query.options(db.joinedload(Department.services)).order_by(Department.name).all()
+        else:
+            all_departments = Department.query.join(Service).join(Service.managers).filter(User.id == current_user.id).options(db.joinedload(Department.services)).order_by(Department.name).distinct().all()
+
+        color_palette = ['#FE9321', '#6FE3CC', '#185D7A', '#C8DB2A', '#EF4687']
+
+        for dept in all_departments:
+            dept_services_data = []
+            department_total_tickets = 0
+            services_in_dept = sorted(dept.services, key=lambda s: s.name)
+            for i, service in enumerate(services_in_dept):
+                if current_user.role == 'Admin' or service in current_user.managed_services:
+                    found = False
+                    for row in summary_data:
+                        if row.dept_name == dept.name and row.service_name == service.name:
+                            active = row.total - row.resolved_count
+                            dept_services_data.append({'name': service.name, 'active': active, 'resolved': row.resolved_count, 'total': row.total, 'color': color_palette[i % len(color_palette)]})
+                            department_total_tickets += row.total
+                            found = True
+                            break
+                    if not found:
+                        dept_services_data.append({'name': service.name, 'active': 0, 'resolved': 0, 'total': 0, 'color': color_palette[i % len(color_palette)]})
+            if dept_services_data:
+                dashboard_summary[dept.name] = {
+                    'services': dept_services_data,
+                    'department_total': department_total_tickets
+                }
     
-    if current_user.role == 'Admin':
-        all_departments = Department.query.options(db.joinedload(Department.services)).order_by(Department.name).all()
+    return render_template('staff_dashboard.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, dashboard_summary=dashboard_summary, title="System Dashboard", available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter, search_query=search_query)
+
+@app.route('/export-tickets')
+@login_required
+@admin_required
+def export_tickets():
+    search_query = request.args.get('search', '').strip()
+    selected_year = request.args.get('year', datetime.utcnow().year, type=int)
+    selected_quarter = request.args.get('quarter', 0, type=int)
+
+    export_query = Ticket.query.options(
+        joinedload(Ticket.school),
+        joinedload(Ticket.service_type).joinedload(Service.department)
+    ).order_by(Ticket.date_posted.desc())
+
+    if search_query:
+        search_term = f"%{search_query}%"
+        export_query = export_query.join(School, Ticket.school_id == School.id, isouter=True).filter(
+            or_(
+                Ticket.ticket_number.ilike(search_term),
+                Ticket.requester_name.ilike(search_term),
+                School.name.ilike(search_term)
+            )
+        )
     else:
-        all_departments = Department.query.join(Service).join(Service.managers).filter(User.id == current_user.id).options(db.joinedload(Department.services)).order_by(Department.name).distinct().all()
-
-    color_palette = ['#FFCBE1', '#D6E5BD', '#F9E1A8', '#BCD8EC', '#DCCCEC', '#FFDAB4']
-
-    for dept in all_departments:
-        dept_services_data = []
-        services_in_dept = sorted(dept.services, key=lambda s: s.name)
-        for i, service in enumerate(services_in_dept):
-            if current_user.role == 'Admin' or service in current_user.managed_services:
-                found = False
-                for row in summary_data:
-                    if row.dept_name == dept.name and row.service_name == service.name:
-                        active = row.total - row.resolved_count
-                        dept_services_data.append({'name': service.name, 'active': active, 'resolved': row.resolved_count, 'total': row.total, 'color': color_palette[i % len(color_palette)]})
-                        found = True
-                        break
-                if not found:
-                    dept_services_data.append({'name': service.name, 'active': 0, 'resolved': 0, 'total': 0, 'color': color_palette[i % len(color_palette)]})
-        if dept_services_data:
-            dashboard_summary[dept.name] = {'services': dept_services_data}
+        export_query = export_query.filter(extract('year', Ticket.date_posted) == selected_year)
+        quarters = {
+            1: (datetime(selected_year, 1, 1), datetime(selected_year, 3, 31, 23, 59, 59)),
+            2: (datetime(selected_year, 4, 1), datetime(selected_year, 6, 30, 23, 59, 59)),
+            3: (datetime(selected_year, 7, 1), datetime(selected_year, 9, 30, 23, 59, 59)),
+            4: (datetime(selected_year, 10, 1), datetime(selected_year, 12, 31, 23, 59, 59)),
+        }
+        if selected_quarter in quarters:
+            start_date, end_date = quarters[selected_quarter]
+            export_query = export_query.filter(Ticket.date_posted.between(start_date, end_date))
     
-    title = "System Dashboard"
-    return render_template('staff_dashboard.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, dashboard_summary=dashboard_summary, title=title, available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter)
+    tickets_to_export = export_query.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    header = [
+        'Ticket Number', 'Status', 'Requester Name', 'Requester Email', 
+        'School/Office', 'Department', 'Service', 'Date Submitted'
+    ]
+    writer.writerow(header)
+
+    for ticket in tickets_to_export:
+        row = [
+            ticket.ticket_number,
+            ticket.status,
+            ticket.requester_name,
+            ticket.requester_email,
+            ticket.school.name if ticket.school else 'N/A',
+            ticket.service_type.department.name,
+            ticket.service_type.name,
+            ticket.date_posted.strftime('%Y-%m-%d %H:%M:%S')
+        ]
+        writer.writerow(row)
+
+    output.seek(0)
+    
+    response = Response(output.getvalue(), mimetype='text/csv')
+    response.headers["Content-Disposition"] = "attachment;filename=tickets_export.csv"
+    return response
+
 
 @app.route('/my-tickets')
 @login_required
 def my_tickets():
     page_active = request.args.get('page_active', 1, type=int)
     page_resolved = request.args.get('page_resolved', 1, type=int)
+    search_query = request.args.get('search', '').strip()
+    
     base_query = Ticket.query.filter_by(requester_email=current_user.email)
-    active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+
+    if search_query:
+        search_term = f"%{search_query}%"
+        base_query = base_query.join(Service).filter(
+            or_(
+                Ticket.ticket_number.ilike(search_term),
+                Service.name.ilike(search_term)
+            )
+        )
+
+    status_order = case(
+        (Ticket.status == 'Open', 1),
+        (Ticket.status == 'In Progress', 2),
+        else_=3
+    )
+
+    active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(status_order, Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
     resolved_tickets = base_query.filter(Ticket.status == 'Resolved').order_by(Ticket.date_posted.desc()).paginate(page=page_resolved, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
-    return render_template('my_tickets.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, title='My Tickets')
+    
+    return render_template('my_tickets.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, title='My Tickets', search_query=search_query)
 
 @app.route('/ticket/<int:ticket_id>', methods=['GET', 'POST'])
 @login_required
@@ -392,50 +490,60 @@ def ticket_detail(ticket_id):
     if not ticket:
         flash('Ticket not found!', 'error')
         return redirect(url_for('home'))
-    is_staff_or_admin = current_user.role == 'Admin' or current_user in ticket.service_type.managers
+    
+    is_staff_or_admin = current_user.role == 'Admin' or (current_user.role == 'Staff' and ticket.service_type in current_user.managed_services)
+    
     if is_staff_or_admin:
         form = UpdateTicketForm()
     else:
+        if ticket.requester_email != current_user.email:
+             flash('You do not have permission to view this ticket.', 'danger')
+             return redirect(url_for('home'))
         form = ResponseForm()
 
-    canned_responses = []
+    system_canned_responses = []
+    personal_canned_responses = []
+    
     if is_staff_or_admin:
-        canned_responses = CannedResponse.query.filter_by(department_id=ticket.department_id).order_by(CannedResponse.title).all()
+        system_canned_responses = CannedResponse.query.filter( or_( CannedResponse.service_id == ticket.service_id, (CannedResponse.department_id == ticket.department_id) & (CannedResponse.service_id == None) ) ).order_by(CannedResponse.body).all()
+        personal_canned_responses = PersonalCannedResponse.query.filter_by(user_id=current_user.id).order_by(PersonalCannedResponse.body).all()
 
     if form.validate_on_submit():
         if ticket.status == 'Resolved' and not is_staff_or_admin:
             flash('This ticket is already resolved and cannot receive new responses.', 'info')
             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+        
         if form.attachment.data:
             file = form.attachment.data
-            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
             filename = f"{timestamp}_{secure_filename(file.filename)}"
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            new_attachment = Attachment(filename=filename, ticket_id=ticket.id)
-            db.session.add(new_attachment)
-        response = Response(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
+            db.session.add(Attachment(filename=filename, ticket_id=ticket.id))
+            
+        response = TicketResponse(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
         db.session.add(response)
+        
         if hasattr(form, 'status'):
             ticket.status = form.status.data
             if ticket.status == 'Resolved':
                 send_resolution_email(ticket, form.body.data)
-                flash('Your response has been added and a resolution email has been sent to the client.', 'success')
+                flash('Your response has been added and a resolution email has been sent.', 'success')
             else:
                 flash('Your response has been added and the ticket status has been updated.', 'success')
         else:
             flash('Your response has been added successfully!', 'success')
             if not is_staff_or_admin:
                 send_staff_notification_email(ticket, response)
+                
         db.session.commit()
         return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+    
     if request.method == 'GET' and hasattr(form, 'status'):
         form.status.data = ticket.status
+        
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
-    return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, canned_responses=canned_responses)
-
-# =================================================================
-# === ADMIN ROUTES ================================================
-# =================================================================
+    
+    return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, system_canned_responses=system_canned_responses, personal_canned_responses=personal_canned_responses)
 
 @app.route('/admin/dashboard')
 @login_required
@@ -458,7 +566,9 @@ def edit_user(user_id):
     if not user:
         flash('User not found.', 'danger')
         return redirect(url_for('manage_users'))
+    
     form = EditUserForm(obj=user)
+    
     if form.validate_on_submit():
         user.name = form.name.data
         user.email = form.email.data
@@ -472,9 +582,17 @@ def edit_user(user_id):
         db.session.commit()
         flash(f'User {user.name} has been updated successfully!', 'success')
         return redirect(url_for('manage_users'))
-    departments = Department.query.order_by(Department.name).all()
+    
+    if request.method == 'GET':
+        form.name.data = user.name
+        form.email.data = user.email
+        form.role.data = user.role
+
+    departments = Department.query.options(joinedload(Department.services)).order_by(Department.name).all()
     managed_service_ids = {service.id for service in user.managed_services}
+    
     return render_template('admin/edit_user.html', form=form, user=user, departments=departments, managed_service_ids=managed_service_ids, title='Edit User')
+
 
 @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
 @login_required
@@ -485,7 +603,7 @@ def delete_user(user_id):
         db.session.delete(user)
         db.session.commit()
         flash(f'User {user.name} has been deleted.', 'success')
-    elif user.id == current_user.id:
+    elif user and user.id == current_user.id:
         flash('You cannot delete your own account.', 'danger')
     else:
         flash('User not found.', 'danger')
@@ -521,19 +639,22 @@ def manage_authorized_emails():
         
     if bulk_form.validate_on_submit() and bulk_form.submit_bulk.data:
         csv_file = bulk_form.csv_file.data
-        stream = io.StringIO(csv_file.read().decode("UTF8"), newline=None)
-        csv_reader = csv.reader(stream)
-        added_count, duplicate_count = 0, 0
-        for row in csv_reader:
-            if row and row[0].strip():
-                email = row[0].strip()
-                if not AuthorizedEmail.query.filter_by(email=email).first():
-                    db.session.add(AuthorizedEmail(email=email))
-                    added_count += 1
-                else:
-                    duplicate_count += 1
-        if added_count > 0: db.session.commit()
-        flash(f'Bulk upload complete. Added: {added_count} new emails. Duplicates skipped: {duplicate_count}.', 'info')
+        try:
+            stream = io.StringIO(csv_file.read().decode("UTF8"), newline=None)
+            csv_reader = csv.reader(stream)
+            added_count, duplicate_count = 0, 0
+            for row in csv_reader:
+                if row and row[0].strip():
+                    email = row[0].strip()
+                    if not AuthorizedEmail.query.filter_by(email=email).first():
+                        db.session.add(AuthorizedEmail(email=email))
+                        added_count += 1
+                    else:
+                        duplicate_count += 1
+            if added_count > 0: db.session.commit()
+            flash(f'Bulk upload complete. Added: {added_count} new emails. Duplicates skipped: {duplicate_count}.', 'info')
+        except Exception as e:
+            flash(f'Error processing bulk upload: {e}', 'danger')
         return redirect(url_for('manage_authorized_emails'))
     
     base_query = AuthorizedEmail.query
@@ -626,12 +747,22 @@ def manage_canned_responses():
 def add_canned_response():
     form = CannedResponseForm()
     form.department_id.choices = [(0, '-- Select Department --')] + [(d.id, d.name) for d in Department.query.order_by('name')]
-    if form.validate_on_submit():
-        new_response = CannedResponse(title=form.title.data, body=form.body.data, department_id=form.department_id.data)
-        db.session.add(new_response)
-        db.session.commit()
-        flash(f'Canned response "{form.title.data}" has been created.', 'success')
-        return redirect(url_for('manage_canned_responses'))
+    form.service_id.choices = [(0, '-- General (All Services) --')]
+    
+    if request.method == 'POST':
+        dept_id = request.form.get('department_id')
+        if dept_id and dept_id != '0':
+            services = Service.query.filter_by(department_id=int(dept_id)).order_by('name').all()
+            form.service_id.choices.extend([(s.id, s.name) for s in services])
+        
+        if form.validate_on_submit():
+            service_id_val = form.service_id.data if form.service_id.data != 0 else None
+            new_response = CannedResponse(title=form.title.data, body=form.body.data, department_id=form.department_id.data, service_id=service_id_val)
+            db.session.add(new_response)
+            db.session.commit()
+            flash(f'Canned response "{form.title.data}" has been created.', 'success')
+            return redirect(url_for('manage_canned_responses'))
+    
     return render_template('admin/add_edit_canned_response.html', form=form, title='Add Canned Response')
 
 @app.route('/admin/canned-response/<int:response_id>/edit', methods=['GET', 'POST'])
@@ -646,15 +777,36 @@ def edit_canned_response(response_id):
     form = CannedResponseForm(obj=response)
     form.department_id.choices = [(d.id, d.name) for d in Department.query.order_by('name')]
     
-    if form.validate_on_submit():
-        response.title = form.title.data
-        response.body = form.body.data
-        response.department_id = form.department_id.data
-        db.session.commit()
-        flash(f'Canned response "{form.title.data}" has been updated.', 'success')
-        return redirect(url_for('manage_canned_responses'))
+    services = Service.query.filter_by(department_id=response.department_id).order_by('name').all()
+    form.service_id.choices = [(0, '-- General (All Services) --')] + [(s.id, s.name) for s in services]
+    
+    if request.method == 'POST':
+        dept_id = request.form.get('department_id')
+        if dept_id and dept_id != '0':
+            services = Service.query.filter_by(department_id=int(dept_id)).order_by('name').all()
+            form.service_id.choices = [(0, '-- General (All Services) --')] + [(s.id, s.name) for s in services]
         
+        if form.validate_on_submit():
+            response.title = form.title.data
+            response.body = form.body.data
+            response.department_id = form.department_id.data
+            response.service_id = form.service_id.data if form.service_id.data != 0 else None
+            db.session.commit()
+            flash(f'Canned response "{form.title.data}" has been updated.', 'success')
+            return redirect(url_for('manage_canned_responses'))
+            
+    if request.method == 'GET':
+        form.service_id.data = response.service_id if response.service_id else 0
+
     return render_template('admin/add_edit_canned_response.html', form=form, title='Edit Canned Response')
+
+@app.route('/admin/_get_services_for_department/<int:dept_id>')
+@login_required
+@admin_required
+def _get_services_for_department(dept_id):
+    services = Service.query.filter_by(department_id=dept_id).order_by('name').all()
+    service_array = [{"id": s.id, "name": s.name} for s in services]
+    return json.dumps(service_array)
 
 @app.route('/admin/canned-response/<int:response_id>/delete', methods=['POST'])
 @login_required
@@ -669,9 +821,41 @@ def delete_canned_response(response_id):
         flash('Canned response not found.', 'danger')
     return redirect(url_for('manage_canned_responses'))
 
-# =================================================================
-# === TICKET CREATION FLOW ========================================
-# =================================================================
+@app.route('/my-responses', methods=['GET', 'POST'])
+@login_required
+def manage_my_responses():
+    if current_user.role not in ['Admin', 'Staff']:
+        flash('You do not have permission to access this page.', 'danger')
+        return redirect(url_for('home'))
+
+    form = PersonalCannedResponseForm()
+    ticket_id = request.args.get('ticket_id')
+    
+    if form.validate_on_submit():
+        new_response = PersonalCannedResponse(title=form.title.data, body=form.body.data, owner=current_user)
+        db.session.add(new_response)
+        db.session.commit()
+        flash('Your new personal response has been saved!', 'success')
+        return redirect(url_for('manage_my_responses', ticket_id=ticket_id))
+
+    my_responses = PersonalCannedResponse.query.filter_by(user_id=current_user.id).order_by(PersonalCannedResponse.title).all()
+    
+    return render_template('manage_my_responses.html', title='My Personal Canned Responses', form=form, my_responses=my_responses, ticket_id=ticket_id)
+
+@app.route('/my-responses/<int:response_id>/delete', methods=['POST'])
+@login_required
+def delete_my_response(response_id):
+    response = db.session.get(PersonalCannedResponse, response_id)
+    ticket_id = request.args.get('ticket_id')
+    
+    if response and response.user_id == current_user.id:
+        db.session.delete(response)
+        db.session.commit()
+        flash('Your personal response has been deleted.', 'success')
+    else:
+        flash('Error: Response not found or you do not have permission to delete it.', 'danger')
+        
+    return redirect(url_for('manage_my_responses', ticket_id=ticket_id))
 
 @app.route('/create-ticket/select-department', methods=['GET'])
 def select_department():
@@ -714,6 +898,8 @@ def create_ticket_form(service_id):
     form = FormClass()
     if request.method == 'GET' and current_user.is_authenticated:
         form.requester_email.data = current_user.email
+        form.requester_name.data = current_user.name
+        
     if form.validate_on_submit():
         details_data = {}
         general_fields = {field.name for field in GeneralTicketForm()}
@@ -730,12 +916,15 @@ def create_ticket_form(service_id):
                 filename = secure_filename(f"{field.name}_{file.filename}")
                 file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                 saved_filenames.append(filename)
+                
         current_year = datetime.now(timezone.utc).year
         dept_code_map = {"ICT": "ICT", "Personnel": "PERS", "Legal Services": "LEGAL", "Office of the SDS": "SDS", "Accounting Unit": "ACCT", "Supply Office": "SUP"}
         dept_code = dept_code_map.get(service.department.name, "GEN")
+        
         last_ticket = Ticket.query.filter(Ticket.ticket_number.like(f'{dept_code}-{current_year}-%')).order_by(Ticket.id.desc()).first()
         new_sequence = (int(last_ticket.ticket_number.split('-')[-1]) + 1) if last_ticket else 1
         new_ticket_number = f'{dept_code}-{current_year}-{new_sequence:04d}'
+        
         new_ticket = Ticket(
             ticket_number=new_ticket_number,
             requester_name=form.requester_name.data,
@@ -749,17 +938,20 @@ def create_ticket_form(service_id):
         )
         db.session.add(new_ticket)
         db.session.commit()
+        
         for fname in saved_filenames:
             db.session.add(Attachment(filename=fname, ticket_id=new_ticket.id))
         db.session.commit()
+        
         send_new_ticket_email(new_ticket)
         flash(f'Your ticket has been created! A confirmation has been sent to your email. Your ticket number is {new_ticket_number}.', 'success')
-        return redirect(url_for('home'))
-    return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
+        
+        if current_user.is_authenticated:
+            return redirect(url_for('my_tickets'))
+        else:
+            return redirect(url_for('select_department'))
 
-# =================================================================
-# === USER AUTHENTICATION =========================================
-# =================================================================
+    return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -806,7 +998,7 @@ def reset_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             send_reset_email(user)
-        flash('An email has been sent with instructions to reset your password.', 'info')
+        flash('An email has been sent with instructions to reset your password (if the email exists in our system).', 'info')
         return redirect(url_for('login'))
     return render_template('request_reset.html', title='Reset Password', form=form)
 
@@ -825,8 +1017,6 @@ def reset_token(token):
         flash('Your password has been updated! You are now able to log in', 'success')
         return redirect(url_for('login'))
     return render_template('reset_token.html', title='Reset Password', form=form)
-
-# =================================================================
 
 if __name__ == '__main__':
     app.run(debug=True)

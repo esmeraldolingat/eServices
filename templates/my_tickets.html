@@ -1,18 +1,35 @@
 {% extends "layout.html" %}
 {% block content %}
-<div class="container mt-4">
+<div class="container my-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="mb-0">{{ title }}</h1>
+        <h2 class="mb-0">{{ title }}</h2>
         <a href="{{ url_for('select_department') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle-fill me-2"></i>Create New Ticket
         </a>
     </div>
 
+    <!-- Search Form for User -->
+    <form method="GET" action="{{ url_for('my_tickets') }}">
+        <div class="input-group mb-4 shadow-sm">
+            <input type="text" class="form-control" placeholder="Search by Ticket # or Service Name..." name="search" value="{{ search_query or '' }}">
+            <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+            {% if search_query %}
+            <a href="{{ url_for('my_tickets') }}" class="btn btn-outline-danger" title="Clear Search"><i class="bi bi-x-lg"></i></a>
+            {% endif %}
+        </div>
+    </form>
+    
+    {% if search_query %}
+    <div class="alert alert-info">
+        Showing search results for: <strong>"{{ search_query }}"</strong>.
+    </div>
+    {% endif %}
+
     <!-- Active Tickets Section -->
-    <h4 class="mb-3">My Active Tickets</h4>
+    <h4 class="mb-3">Active Tickets ({{ active_tickets.total }})</h4>
     <div class="card shadow-sm mb-5">
-        <div class="card-body">
-            {% if active_tickets and active_tickets.items %}
+        <div class="card-body p-0">
+            {% if active_tickets.items %}
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead>
@@ -20,7 +37,7 @@
                             <th scope="col">Ticket #</th>
                             <th scope="col">Service</th>
                             <th scope="col">Status</th>
-                            <th scope="col">Date Created</th>
+                            <th scope="col">Date Submitted</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -29,43 +46,40 @@
                             <td><a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a></td>
                             <td>{{ ticket.service_type.name }}</td>
                             <td>
-                                {% if ticket.status == 'Open' %}
-                                    <span class="badge bg-success">{{ ticket.status }}</span>
-                                {% elif ticket.status == 'In Progress' %}
-                                    <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
+                                {% if ticket.status == 'Open' %}<span class="badge bg-success">{{ ticket.status }}</span>
+                                {% elif ticket.status == 'In Progress' %}<span class="badge bg-warning text-dark">{{ ticket.status }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ ticket.date_posted.strftime('%b %d, %Y') }}</td>
+                            <td>{{ ticket.date_posted.strftime('%b %d, %Y %I:%M %p') }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
             {% else %}
-                <div class="alert alert-light mb-0" role="alert">
+            <div class="alert alert-light m-3 mb-0" role="alert">
+                {% if search_query %}
+                    No active tickets found for your search.
+                {% else %}
                     You have no active tickets.
-                </div>
+                {% endif %}
+            </div>
             {% endif %}
         </div>
-        {% if active_tickets and active_tickets.pages > 1 %}
-        <div class="card-footer">
-            <nav aria-label="Active tickets navigation">
+        <!-- Pagination for Active Tickets -->
+        {% if active_tickets.pages > 1 %}
+        <div class="card-footer bg-light">
+            <nav>
                 <ul class="pagination justify-content-center mb-0">
-                    <li class="page-item {% if not active_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('my_tickets', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page) }}">Previous</a>
-                    </li>
-                    {% for page_num in active_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% for page_num in active_tickets.iter_pages() %}
                         {% if page_num %}
                             <li class="page-item {% if active_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('my_tickets', page_active=page_num, page_resolved=resolved_tickets.page) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('my_tickets', page_active=page_num, search=search_query) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
-                    <li class="page-item {% if not active_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('my_tickets', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page) }}">Next</a>
-                    </li>
                 </ul>
             </nav>
         </div>
@@ -73,18 +87,18 @@
     </div>
 
     <!-- Resolved Tickets Section -->
-    <h4 class="mb-3">My Resolved Tickets</h4>
-    <div class="card shadow-sm">
-         <div class="card-body">
-            {% if resolved_tickets and resolved_tickets.items %}
-            <div class="table-responsive">
+    <h4 class="mb-3">Resolved Tickets ({{ resolved_tickets.total }})</h4>
+    <div class="card shadow-sm mb-5">
+        <div class="card-body p-0">
+             {% if resolved_tickets.items %}
+             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead>
                         <tr>
                             <th scope="col">Ticket #</th>
                             <th scope="col">Service</th>
                             <th scope="col">Status</th>
-                            <th scope="col">Date Resolved</th>
+                            <th scope="col">Date Submitted</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -92,38 +106,37 @@
                         <tr class="text-muted">
                             <td><a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a></td>
                             <td>{{ ticket.service_type.name }}</td>
-                            <td><span class="badge bg-secondary">{{ ticket.status }}</span></td>
-                            <td>{{ ticket.date_posted.strftime('%b %d, %Y') }}</td>
+                            <td><span class="badge bg-primary">{{ ticket.status }}</span></td>
+                            <td>{{ ticket.date_posted.strftime('%b %d, %Y %I:%M %p') }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-             {% else %}
-                <div class="alert alert-light mb-0" role="alert">
-                    You have no resolved tickets yet.
+            {% else %}
+                <div class="alert alert-light m-3 mb-0">
+                    {% if search_query %}
+                        No resolved tickets found for your search.
+                    {% else %}
+                        You have no resolved tickets.
+                    {% endif %}
                 </div>
             {% endif %}
         </div>
-         {% if resolved_tickets and resolved_tickets.pages > 1 %}
-        <div class="card-footer">
-             <nav aria-label="Resolved tickets navigation">
+        <!-- Pagination for Resolved Tickets -->
+        {% if resolved_tickets.pages > 1 %}
+        <div class="card-footer bg-light">
+            <nav>
                 <ul class="pagination justify-content-center mb-0">
-                    <li class="page-item {% if not resolved_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('my_tickets', page_active=active_tickets.page, page_resolved=resolved_tickets.prev_num) }}">Previous</a>
-                    </li>
-                    {% for page_num in resolved_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                    {% for page_num in resolved_tickets.iter_pages() %}
                         {% if page_num %}
                             <li class="page-item {% if resolved_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('my_tickets', page_active=active_tickets.page, page_resolved=page_num) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('my_tickets', page_resolved=page_num, search=search_query) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
-                    <li class="page-item {% if not resolved_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('my_tickets', page_active=active_tickets.page, page_resolved=resolved_tickets.next_num) }}">Next</a>
-                    </li>
                 </ul>
             </nav>
         </div>

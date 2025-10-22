@@ -1,0 +1,89 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container my-4">
+    <!-- SIMULA NG PAGBABAGO: BACK BUTTON -->
+    {% if ticket_id %}
+    <div class="mb-4">
+        <a href="{{ url_for('ticket_detail', ticket_id=ticket_id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Ticket
+        </a>
+    </div>
+    {% endif %}
+    <!-- TAPOS NG PAGBABAGO: BACK BUTTON -->
+
+    <div class="row">
+        <!-- Left Column: List of existing responses -->
+        <div class="col-md-7">
+            <h2 class="mb-4"><i class="bi bi-person-badge"></i> My Personal Responses</h2>
+            
+            {% if my_responses %}
+                <div class="list-group">
+                    {% for response in my_responses %}
+                    <div class="list-group-item list-group-item-action flex-column align-items-start">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ response.title }}</h5>
+                            <!-- Delete Button Form -->
+                            <form action="{{ url_for('delete_my_response', response_id=response.id, ticket_id=ticket_id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this response?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Response"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </div>
+                        <p class="mb-1 text-muted">{{ response.body }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-light" role="alert">
+                    You have not saved any personal responses yet. Use the form on the right to add one.
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Add new response form -->
+        <div class="col-md-5">
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="mb-0">Add New Personal Response</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="" novalidate>
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-3">
+                            {{ form.title.label(class="form-label") }}
+                            {% if form.title.errors %}
+                                {{ form.title(class="form-control is-invalid", placeholder="e.g., Follow-up Question") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.title.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.title(class="form-control", placeholder="e.g., Follow-up Question") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.body.label(class="form-label") }}
+                            {% if form.body.errors %}
+                                {{ form.body(class="form-control is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.body.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.body(class="form-control") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="d-grid">
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+

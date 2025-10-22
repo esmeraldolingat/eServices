@@ -295,3 +295,17 @@ class ResetPasswordForm(FlaskForm):
     confirm_password = PasswordField('Confirm New Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Reset Password')
 
+
+class CannedResponseForm(FlaskForm):
+    title = StringField('Title', validators=[DataRequired()])
+    body = TextAreaField('Response Text', validators=[DataRequired()], render_kw={'rows': 5})
+    department_id = SelectField('Department', coerce=int, validators=[DataRequired()])
+    service_id = SelectField('Specific Service (Optional)', coerce=int, validators=[Optional()])
+    submit = SubmitField('Save Response')
+
+# --- IDAGDAG ITONG BUONG CLASS SA DULO NG FORMS.PY ---
+class PersonalCannedResponseForm(FlaskForm):
+    title = StringField('Title', validators=[DataRequired(message="Please provide a short title for this response.")])
+    body = TextAreaField('Response Text', validators=[DataRequired(message="Response body cannot be empty.")], render_kw={'rows': 5})
+    submit = SubmitField('Save Response')
+# --- HANGGANG DITO ---

@@ -3,39 +3,74 @@
 <div class="container my-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0">{{ title }}</h1>
-        <a href="{{ url_for('select_department') }}" class="btn btn-primary">
-            <i class="bi bi-plus-circle-fill me-2"></i>Create New Ticket
-        </a>
-    </div>
-
-    <!-- Filters Section -->
-    <div class="d-flex justify-content-center align-items-center mb-4 gap-3">
-        <!-- Year Filter -->
-        <div class="dropdown">
-            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="yearFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                Year: {{ selected_year }}
-            </button>
-            <ul class="dropdown-menu" aria-labelledby="yearFilter">
-                {% for year in available_years %}
-                <li><a class="dropdown-item {% if year == selected_year %}active{% endif %}" href="{{ url_for('staff_dashboard', year=year, quarter=0) }}">{{ year }}</a></li>
-                {% endfor %}
-            </ul>
-        </div>
-
-        <!-- Quarter Filter Buttons -->
-        <div class="btn-group shadow-sm" role="group" aria-label="Quarter filters">
-            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=0) }}" class="btn {% if selected_quarter == 0 %}btn-primary{% else %}btn-outline-primary{% endif %}">All Year</a>
-            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=1) }}" class="btn {% if selected_quarter == 1 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q1</a>
-            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=2) }}" class="btn {% if selected_quarter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q2</a>
-            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=3) }}" class="btn {% if selected_quarter == 3 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q3</a>
-            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=4) }}" class="btn {% if selected_quarter == 4 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q4</a>
+        <div class="d-flex gap-2">
+            {% if current_user.role == 'Admin' %}
+            <a href="{{ url_for('export_tickets', search=search_query, year=selected_year, quarter=selected_quarter) }}" class="btn btn-outline-success">
+                <i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>Export to CSV
+            </a>
+            {% endif %}
+            <a href="{{ url_for('select_department') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle-fill me-2"></i>Create New Ticket
+            </a>
         </div>
     </div>
+
+    <!-- Search and Filters Section -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-6">
+                    <!-- Search Form -->
+                    <form method="GET" action="{{ url_for('staff_dashboard') }}">
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Search by Ticket #, Requester, or School..." name="search" value="{{ search_query or '' }}">
+                            <button class="btn btn-outline-primary" type="submit"><i class="bi bi-search"></i> Search</button>
+                            {% if search_query %}
+                            <a href="{{ url_for('staff_dashboard') }}" class="btn btn-outline-danger" title="Clear Search"><i class="bi bi-x-lg"></i></a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+                <div class="col-md-6">
+                    <!-- Date Filters (ipakita lang kung HINDI nagse-search) -->
+                    {% if not search_query %}
+                    <div class="d-flex justify-content-md-end align-items-center gap-2">
+                         <!-- Year Filter -->
+                        <div class="dropdown">
+                            <button class="btn btn-outline-primary dropdown-toggle" type="button" id="yearFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                Year: {{ selected_year }}
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="yearFilter">
+                                {% for year in available_years %}
+                                <li><a class="dropdown-item {% if year == selected_year %}active{% endif %}" href="{{ url_for('staff_dashboard', year=year, quarter=0) }}">{{ year }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <!-- Quarter Filter Buttons -->
+                        <div class="btn-group shadow-sm" role="group" aria-label="Quarter filters">
+                            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=0) }}" class="btn {% if selected_quarter == 0 %}btn-primary{% else %}btn-outline-primary{% endif %}">All Year</a>
+                            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=1) }}" class="btn {% if selected_quarter == 1 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q1</a>
+                            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=2) }}" class="btn {% if selected_quarter == 2 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q2</a>
+                            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=3) }}" class="btn {% if selected_quarter == 3 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q3</a>
+                            <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=4) }}" class="btn {% if selected_quarter == 4 %}btn-primary{% else %}btn-outline-primary{% endif %}">Q4</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if search_query %}
+    <div class="alert alert-info">
+        Showing search results for: <strong>"{{ search_query }}"</strong>.
+    </div>
+    {% endif %}
 
     <!-- Active Tickets Section -->
-    <h4 class="mb-3">Active Tickets (Open & In Progress)</h4>
+    <h4 class="mb-3">Active Tickets ({{ active_tickets.total }})</h4>
     <div class="card shadow-sm mb-5">
-        <div class="card-body">
+        <div class="card-body p-0">
             {% if active_tickets and active_tickets.items %}
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -52,13 +87,11 @@
                         {% for ticket in active_tickets.items %}
                         <tr>
                             <td><a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a></td>
-                            <td>{{ ticket.requester_name }}<br><small class="text-muted">{{ ticket.school.name }}</small></td>
+                            <td>{{ ticket.requester_name }}<br><small class="text-muted">{{ ticket.school.name if ticket.school else 'N/A' }}</small></td>
                             <td>{{ ticket.service_type.name }}</td>
                             <td>
-                                {% if ticket.status == 'Open' %}
-                                    <span class="badge bg-success">{{ ticket.status }}</span>
-                                {% elif ticket.status == 'In Progress' %}
-                                    <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
+                                {% if ticket.status == 'Open' %}<span class="badge bg-success">{{ ticket.status }}</span>
+                                {% elif ticket.status == 'In Progress' %}<span class="badge bg-warning text-dark">{{ ticket.status }}</span>
                                 {% endif %}
                             </td>
                             <td>{{ ticket.date_posted.strftime('%b %d, %Y %I:%M %p') }}</td>
@@ -68,8 +101,8 @@
                 </table>
             </div>
             {% else %}
-                <div class="alert alert-light mb-0" role="alert">
-                    No active tickets found for this period. Great job!
+                <div class="alert alert-light m-3 mb-0" role="alert">
+                    No active tickets found.
                 </div>
             {% endif %}
         </div>
@@ -77,21 +110,15 @@
         <div class="card-footer bg-light">
             <nav aria-label="Active tickets navigation">
                 <ul class="pagination justify-content-center mb-0">
-                    <li class="page-item {% if not active_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, year=selected_year, quarter=selected_quarter) }}">Previous</a>
-                    </li>
                     {% for page_num in active_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {% if active_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, year=selected_year, quarter=selected_quarter) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, search=search_query, year=selected_year, quarter=selected_quarter) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
-                    <li class="page-item {% if not active_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page if resolved_tickets else 1, year=selected_year, quarter=selected_quarter) }}">Next</a>
-                    </li>
                 </ul>
             </nav>
         </div>
@@ -99,9 +126,9 @@
     </div>
 
     <!-- Resolved Tickets Section -->
-    <h4 class="mb-3">Resolved Tickets</h4>
+    <h4 class="mb-3">Resolved Tickets ({{ resolved_tickets.total }})</h4>
     <div class="card shadow-sm mb-5">
-         <div class="card-body">
+         <div class="card-body p-0">
             {% if resolved_tickets and resolved_tickets.items %}
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -111,25 +138,25 @@
                             <th scope="col">Requester</th>
                             <th scope="col">Service</th>
                             <th scope="col">Status</th>
-                            <th scope="col">Date Resolved</th>
+                            <th scope="col">Date Created</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for ticket in resolved_tickets.items %}
                         <tr class="text-muted">
                             <td><a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a></td>
-                            <td>{{ ticket.requester_name }}<br><small>{{ ticket.school.name }}</small></td>
+                            <td>{{ ticket.requester_name }}<br><small>{{ ticket.school.name if ticket.school else 'N/A' }}</small></td>
                             <td>{{ ticket.service_type.name }}</td>
-                            <td><span class="badge bg-secondary">{{ ticket.status }}</span></td>
+                            <td><span class="badge bg-primary">{{ ticket.status }}</span></td>
                             <td>{{ ticket.date_posted.strftime('%b %d, %Y %I:%M %p') }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-             {% else %}
-                <div class="alert alert-light mb-0" role="alert">
-                    No resolved tickets found for this period.
+            {% else %}
+                <div class="alert alert-light m-3 mb-0" role="alert">
+                    No resolved tickets found.
                 </div>
             {% endif %}
         </div>
@@ -137,33 +164,29 @@
         <div class="card-footer bg-light">
              <nav aria-label="Resolved tickets navigation">
                 <ul class="pagination justify-content-center mb-0">
-                    <li class="page-item {% if not resolved_tickets.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.prev_num, year=selected_year, quarter=selected_quarter) }}">Previous</a>
-                    </li>
                     {% for page_num in resolved_tickets.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {% if resolved_tickets.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=page_num, year=selected_year, quarter=selected_quarter) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=page_num, search=search_query, year=selected_year, quarter=selected_quarter) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
-                    <li class="page-item {% if not resolved_tickets.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="{{ url_for('staff_dashboard', page_active=active_tickets.page if active_tickets else 1, page_resolved=resolved_tickets.next_num, year=selected_year, quarter=selected_quarter) }}">Next</a>
-                    </li>
                 </ul>
             </nav>
         </div>
         {% endif %}
     </div>
 
-    <!-- Dashboard Summary Section -->
+    <!-- Dashboard Summary Section (ipakita lang kung HINDI nagse-search) -->
+    {% if not search_query %}
     <h4 class="mb-3">Ticket Summary by Department</h4>
     {% for dept_name, dept_data in dashboard_summary.items() %}
         <div class="card shadow-sm mb-4">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">{{ dept_name }}</h5>
+                <span class="badge bg-secondary rounded-pill">Total Tickets: {{ dept_data.department_total }}</span>
             </div>
             <div class="card-body">
                 <div class="row align-items-center">
@@ -182,25 +205,22 @@
                         {% endfor %}
                     </div>
                     <div class="col-md-6">
-                        <div style="height: {{ dept_data.services|length * 45 + 20 }}px; position: relative;">
-                             <canvas class="department-chart" id="chart-{{ loop.index }}"></canvas>
+                         <div style="height: {{ dept_data.services|length * 45 + 20 }}px; position: relative;">
+                            <canvas class="department-chart" id="chart-{{ loop.index }}"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    {% else %}
-        <div class="col">
-            <div class="alert alert-light">No data to display a summary for the selected period.</div>
-        </div>
     {% endfor %}
+    {% endif %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const summaryData = {{ dashboard_summary | tojson | safe }};
-        if (summaryData) {
+        if (summaryData && Object.keys(summaryData).length > 0) {
             const departmentNames = Object.keys(summaryData);
 
             departmentNames.forEach((deptName, index) => {
@@ -220,7 +240,7 @@
                         datasets: [{
                             label: 'Total Tickets',
                             data: totalData,
-                            backgroundColor: serviceColors.map(c => `${c}B3`), // Add alpha for transparency
+                            backgroundColor: serviceColors.map(c => `${c}B3`), 
                             borderColor: serviceColors,
                             borderWidth: 1
                         }]
@@ -232,19 +252,12 @@
                         scales: {
                             x: {
                                 beginAtZero: true,
-                                ticks: {
-                                    precision: 0 // Show whole numbers only
-                                }
+                                ticks: { precision: 0 }
                             }
                         },
                         plugins: {
-                            legend: {
-                                display: false
-                            },
-                            title: {
-                                display: true,
-                                text: `Ticket Volume`
-                            }
+                            legend: { display: false },
+                            title: { display: true, text: `Ticket Volume` }
                         }
                     }
                 });

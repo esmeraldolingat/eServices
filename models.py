@@ -1,4 +1,5 @@
-# models.py
+# Heto ang buong laman ng models.py mo
+
 from itsdangerous.url_safe import URLSafeTimedSerializer as Serializer
 from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
@@ -9,13 +10,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # Initialize the database object here, without the app
 db = SQLAlchemy()
 
-# --- ITO ANG BAGONG ASSOCIATION TABLE ---
+# --- Association Table ---
 # Association Table for User <-> Service many-to-many relationship
 user_service_association = db.Table('user_service',
     db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
     db.Column('service_id', db.Integer, db.ForeignKey('service.id'), primary_key=True)
 )
-# --- HANGGANG DITO ---
 
 # --- Model Classes ---
 
@@ -24,13 +24,17 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(120), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     password_hash = db.Column(db.String(256))
-    role = db.Column(db.String(20), nullable=False, default='User')
-    responses = db.relationship('Response', backref='author', lazy=True)
+    role = db.Column(db.String(20), nullable=False, default='User') # e.g., 'User', 'Staff', 'Admin'
+    
+    # Ito ay para sa mga "comments" o "replies" sa isang ticket
+    responses = db.relationship('Response', backref='author', lazy=True) 
 
-    # --- ITO ANG BAGONG RELATIONSHIP ---
     managed_services = db.relationship('Service', secondary=user_service_association,
                                        backref=db.backref('managers', lazy='dynamic'),
                                        lazy='dynamic')
+    
+    # --- IDINAGDAG PARA SA PERSONAL RESPONSES ---
+    personal_canned_responses = db.relationship('PersonalCannedResponse', backref='owner', lazy=True, cascade="all, delete-orphan")
     # --- HANGGANG DITO ---
 
     def get_reset_token(self):
@@ -59,13 +63,14 @@ class User(db.Model, UserMixin):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-# (Ang iba pang model classes tulad ng Department, Service, atbp. ay mananatiling pareho)
 class Department(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    
     services = db.relationship('Service', backref='department', lazy=True, cascade="all, delete-orphan")
     tickets = db.relationship('Ticket', backref='ticket_department', lazy=True)
-    canned_responses = db.relationship('CannedResponse', backref='response_department', lazy=True, cascade="all, delete-orphan")
+    
+    canned_responses = db.relationship('CannedResponse', backref='department', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"Department('{self.name}')"
@@ -75,6 +80,8 @@ class Service(db.Model):
     name = db.Column(db.String(200), nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=False)
     tickets = db.relationship('Ticket', backref='service_type', lazy=True)
+    
+    canned_responses = db.relationship('CannedResponse', backref='service', lazy=True)
 
     def __repr__(self):
         return f"Service('{self.name}')"
@@ -100,6 +107,7 @@ class Ticket(db.Model):
     department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=False)
     service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     school_id = db.Column(db.Integer, db.ForeignKey('school.id'), nullable=True)
+    
     attachments = db.relationship('Attachment', backref='ticket', lazy=True, cascade="all, delete-orphan")
     responses = db.relationship('Response', backref='ticket', lazy=True, cascade="all, delete-orphan")
 
@@ -126,9 +134,10 @@ class Response(db.Model):
 
 class CannedResponse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    body = db.Column(db.Text, nullable=False)
-    department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False) 
+    body = db.Column(db.Text, nullable=False) 
+    department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=False) 
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=True)
 
     def __repr__(self):
         return f"CannedResponse('{self.title}')"
@@ -139,3 +148,14 @@ class AuthorizedEmail(db.Model):
 
     def __repr__(self):
         return f"AuthorizedEmail('{self.email}')"
+
+# --- BAGONG MODEL PARA SA PERSONAL RESPONSES ---
+class PersonalCannedResponse(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False) # Isang maikling title, e.g., "My Follow-up"
+    body = db.Column(db.Text, nullable=False) # Ang buong text ng response
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # Sino ang may-ari nito
+
+    def __repr__(self):
+        return f"PersonalCannedResponse('{self.title}' by User {self.user_id})"
+# --- HANGGANG DITO ---
