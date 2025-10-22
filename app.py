@@ -298,6 +298,17 @@ def home():
 def staff_dashboard():
     page_active = request.args.get('page_active', 1, type=int)
     page_resolved = request.args.get('page_resolved', 1, type=int)
+    
+    available_years_query = db.session.query(extract('year', Ticket.date_posted)).distinct().order_by(extract('year', Ticket.date_posted).desc())
+    available_years = [y[0] for y in available_years_query.all()]
+
+    current_year = datetime.utcnow().year
+    selected_year = request.args.get('year', current_year, type=int)
+    if not available_years:
+        available_years.append(selected_year)
+    elif selected_year not in available_years:
+        selected_year = available_years[0] # Default to most recent year if invalid year is passed
+    
     selected_quarter = request.args.get('quarter', 0, type=int)
     
     base_query = Ticket.query
@@ -307,15 +318,6 @@ def staff_dashboard():
         func.count(Ticket.id).label('total'),
         func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
     ).join(Service, Ticket.service_id == Service.id).join(Department, Service.department_id == Department.id)
-
-    available_years_query = db.session.query(extract('year', Ticket.date_posted)).distinct().order_by(extract('year', Ticket.date_posted).desc())
-    available_years = [y[0] for y in available_years_query.all()]
-    current_year = datetime.utcnow().year
-    selected_year = request.args.get('year', current_year, type=int)
-    if not available_years:
-        available_years.append(selected_year)
-    elif selected_year not in available_years:
-        selected_year = available_years[0] # Default to most recent year if invalid year is passed
 
     base_query = base_query.filter(extract('year', Ticket.date_posted) == selected_year)
     summary_query = summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
@@ -390,9 +392,7 @@ def ticket_detail(ticket_id):
     if not ticket:
         flash('Ticket not found!', 'error')
         return redirect(url_for('home'))
-        
     is_staff_or_admin = current_user.role == 'Admin' or current_user in ticket.service_type.managers
-    
     if is_staff_or_admin:
         form = UpdateTicketForm()
     else:
@@ -406,7 +406,6 @@ def ticket_detail(ticket_id):
         if ticket.status == 'Resolved' and not is_staff_or_admin:
             flash('This ticket is already resolved and cannot receive new responses.', 'info')
             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
-            
         if form.attachment.data:
             file = form.attachment.data
             timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
@@ -414,10 +413,8 @@ def ticket_detail(ticket_id):
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             new_attachment = Attachment(filename=filename, ticket_id=ticket.id)
             db.session.add(new_attachment)
-            
         response = Response(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
         db.session.add(response)
-        
         if hasattr(form, 'status'):
             ticket.status = form.status.data
             if ticket.status == 'Resolved':
@@ -429,13 +426,10 @@ def ticket_detail(ticket_id):
             flash('Your response has been added successfully!', 'success')
             if not is_staff_or_admin:
                 send_staff_notification_email(ticket, response)
-                
         db.session.commit()
         return redirect(url_for('ticket_detail', ticket_id=ticket.id))
-    
     if request.method == 'GET' and hasattr(form, 'status'):
         form.status.data = ticket.status
-
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
     return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, canned_responses=canned_responses)
 
