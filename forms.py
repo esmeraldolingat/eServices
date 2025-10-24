@@ -1,9 +1,9 @@
-# forms.py
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, SubmitField, PasswordField, TextAreaField, DateField
 from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, EqualTo
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from sqlalchemy import case
+from flask_login import current_user # <-- ITO ANG IDINAGDAG NA IMPORT
 
 # Import all necessary models
 from models import School, AuthorizedEmail, User, Department
@@ -69,7 +69,9 @@ class CannedResponseForm(FlaskForm):
     title = StringField('Response Title (e.g., "Password Reset Steps")', validators=[DataRequired()])
     body = TextAreaField('Response Body (This is the text that will be inserted)', validators=[DataRequired()])
     department_id = SelectField('Department', coerce=int, validators=[DataRequired()])
+    service_id = SelectField('Specific Service (Optional)', coerce=int, validators=[Optional()]) # Added service_id
     submit = SubmitField('Save Response')
+
 
 # ======================================================
 # === TICKET & RESPONSE FORMS ==========================
@@ -296,16 +298,40 @@ class ResetPasswordForm(FlaskForm):
     submit = SubmitField('Reset Password')
 
 
-class CannedResponseForm(FlaskForm):
-    title = StringField('Title', validators=[DataRequired()])
-    body = TextAreaField('Response Text', validators=[DataRequired()], render_kw={'rows': 5})
-    department_id = SelectField('Department', coerce=int, validators=[DataRequired()])
-    service_id = SelectField('Specific Service (Optional)', coerce=int, validators=[Optional()])
-    submit = SubmitField('Save Response')
-
-# --- IDAGDAG ITONG BUONG CLASS SA DULO NG FORMS.PY ---
+# ======================================================
+# === PERSONAL RESPONSE FORM ===========================
+# ======================================================
 class PersonalCannedResponseForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired(message="Please provide a short title for this response.")])
     body = TextAreaField('Response Text', validators=[DataRequired(message="Response body cannot be empty.")], render_kw={'rows': 5})
     submit = SubmitField('Save Response')
-# --- HANGGANG DITO ---
+
+
+# ======================================================
+# === PROFILE FORMS ====================================
+# ======================================================
+
+class UpdateProfileForm(FlaskForm):
+    """Form para i-update ang pangalan ng user."""
+    name = StringField('Name', validators=[DataRequired()])
+    email = StringField('Email (Cannot be changed)', render_kw={'readonly': True})
+    submit_profile = SubmitField('Update Name')
+
+class ChangePasswordForm(FlaskForm):
+    """Form para palitan ang password ng user."""
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[
+        DataRequired(),
+        Length(min=8, message='Password must be at least 8 characters long.')
+    ])
+    confirm_password = PasswordField('Confirm New Password', validators=[
+        DataRequired(),
+        EqualTo('new_password', message='Passwords must match.')
+    ])
+    submit_password = SubmitField('Change Password')
+
+    # Custom validator para i-check kung tama ang current password
+    def validate_current_password(self, current_password):
+        if not current_user.check_password(current_password.data):
+            raise ValidationError('Incorrect current password.')
+

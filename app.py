@@ -28,7 +28,8 @@ from forms import (
     LocatorSlipForm, AuthorityToTravelForm, OicDesignationForm, SubstituteTeacherForm, AdmForm,
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
     ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm,
-    UpdateTicketForm, CannedResponseForm, PersonalCannedResponseForm
+    UpdateTicketForm, CannedResponseForm, PersonalCannedResponseForm,
+    UpdateProfileForm, ChangePasswordForm # <-- Idinagdag ang bago
 )
 
 # --- App Initialization and Config ---
@@ -69,6 +70,11 @@ mail = Mail(app)
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
+
+# --- Context Processor para sa Current Year ---
+@app.context_processor
+def inject_current_year():
+    return {'current_year': datetime.utcnow().year}
 
 # =================================================================
 # === ADMIN DECORATOR =============================================
@@ -545,6 +551,33 @@ def ticket_detail(ticket_id):
     
     return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, system_canned_responses=system_canned_responses, personal_canned_responses=personal_canned_responses)
 
+# --- BAGONG ROUTE PARA SA PROFILE PAGE ---
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    profile_form = UpdateProfileForm()
+    password_form = ChangePasswordForm()
+
+    # Check which form was submitted using the submit button's name attribute
+    if 'submit_profile' in request.form and profile_form.validate_on_submit():
+        current_user.name = profile_form.name.data
+        db.session.commit()
+        flash('Your profile has been updated.', 'success')
+        return redirect(url_for('profile'))
+    elif 'submit_password' in request.form and password_form.validate_on_submit():
+        current_user.set_password(password_form.new_password.data)
+        db.session.commit()
+        flash('Your password has been changed successfully.', 'success')
+        return redirect(url_for('profile'))
+
+    # Pre-populate profile form on GET request or if validation failed
+    if request.method == 'GET' or not profile_form.validate():
+        profile_form.name.data = current_user.name
+        profile_form.email.data = current_user.email # Email cannot be changed
+
+    return render_template('profile.html', title='My Profile', profile_form=profile_form, password_form=password_form)
+# --- TAPOS NG BAGONG ROUTE ---
+
 @app.route('/admin/dashboard')
 @login_required
 @admin_required
@@ -829,24 +862,46 @@ def manage_my_responses():
         return redirect(url_for('home'))
 
     form = PersonalCannedResponseForm()
-    ticket_id = request.args.get('ticket_id')
+    ticket_id = request.args.get('ticket_id') # Para sa back button
     
     if form.validate_on_submit():
         new_response = PersonalCannedResponse(title=form.title.data, body=form.body.data, owner=current_user)
         db.session.add(new_response)
         db.session.commit()
         flash('Your new personal response has been saved!', 'success')
-        return redirect(url_for('manage_my_responses', ticket_id=ticket_id))
+        return redirect(url_for('manage_my_responses', ticket_id=ticket_id)) # Ipasa ulit ang ticket_id
 
     my_responses = PersonalCannedResponse.query.filter_by(user_id=current_user.id).order_by(PersonalCannedResponse.title).all()
     
     return render_template('manage_my_responses.html', title='My Personal Canned Responses', form=form, my_responses=my_responses, ticket_id=ticket_id)
 
+@app.route('/my-responses/<int:response_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_my_response(response_id):
+    response = db.session.get(PersonalCannedResponse, response_id)
+    ticket_id = request.args.get('ticket_id') # Kunin para sa back button
+
+    if not response or response.user_id != current_user.id or current_user.role not in ['Admin', 'Staff']:
+        flash('Error: Response not found or you do not have permission to edit it.', 'danger')
+        return redirect(url_for('manage_my_responses', ticket_id=ticket_id))
+
+    form = PersonalCannedResponseForm(obj=response) 
+
+    if form.validate_on_submit():
+        response.title = form.title.data
+        response.body = form.body.data
+        db.session.commit()
+        flash('Your personal response has been updated.', 'success')
+        return redirect(url_for('manage_my_responses', ticket_id=ticket_id)) 
+
+    return render_template('edit_my_response.html', title='Edit Personal Response', form=form, response_id=response_id, ticket_id=ticket_id)
+
+
 @app.route('/my-responses/<int:response_id>/delete', methods=['POST'])
 @login_required
 def delete_my_response(response_id):
     response = db.session.get(PersonalCannedResponse, response_id)
-    ticket_id = request.args.get('ticket_id')
+    ticket_id = request.args.get('ticket_id') # Kunin para sa redirect
     
     if response and response.user_id == current_user.id:
         db.session.delete(response)
@@ -855,7 +910,7 @@ def delete_my_response(response_id):
     else:
         flash('Error: Response not found or you do not have permission to delete it.', 'danger')
         
-    return redirect(url_for('manage_my_responses', ticket_id=ticket_id))
+    return redirect(url_for('manage_my_responses', ticket_id=ticket_id)) # Bumalik sa listahan
 
 @app.route('/create-ticket/select-department', methods=['GET'])
 def select_department():

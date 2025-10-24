@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container my-4">
+    <h2 class="mb-4">{{ title }}</h2>
+    <div class="row g-4">
+        <!-- Update Profile Form -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Update Profile Information</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="">
+                        {{ profile_form.hidden_tag() }}
+                        <div class="mb-3">
+                            {{ profile_form.email.label(class="form-label") }}
+                            {{ profile_form.email(class="form-control", readonly=True) }}
+                            <div class="form-text">Email address cannot be changed.</div>
+                        </div>
+                        <div class="mb-3">
+                            {{ profile_form.name.label(class="form-label") }}
+                            {% if profile_form.name.errors %}
+                                {{ profile_form.name(class="form-control is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in profile_form.name.errors %}<span>{{ error }}</span>{% endfor %}
+                                </div>
+                            {% else %}
+                                {{ profile_form.name(class="form-control") }}
+                            {% endif %}
+                        </div>
+                        <div class="d-grid">
+                            {{ profile_form.submit_profile(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Change Password Form -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">Change Password</h5>
+                </div>
+                <div class="card-body">
+                     <form method="POST" action="">
+                        {{ password_form.hidden_tag() }}
+                        <div class="mb-3">
+                            {{ password_form.current_password.label(class="form-label") }}
+                             {% if password_form.current_password.errors %}
+                                {{ password_form.current_password(class="form-control is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in password_form.current_password.errors %}<span>{{ error }}</span>{% endfor %}
+                                </div>
+                            {% else %}
+                                {{ password_form.current_password(class="form-control") }}
+                            {% endif %}
+                        </div>
+                         <div class="mb-3">
+                            {{ password_form.new_password.label(class="form-label") }}
+                             {% if password_form.new_password.errors %}
+                                {{ password_form.new_password(class="form-control is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in password_form.new_password.errors %}<span>{{ error }}</span>{% endfor %}
+                                </div>
+                            {% else %}
+                                {{ password_form.new_password(class="form-control") }}
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            {{ password_form.confirm_password.label(class="form-label") }}
+                             {% if password_form.confirm_password.errors %}
+                                {{ password_form.confirm_password(class="form-control is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in password_form.confirm_password.errors %}<span>{{ error }}</span>{% endfor %}
+                                </div>
+                            {% else %}
+                                {{ password_form.confirm_password(class="form-control") }}
+                            {% endif %}
+                        </div>
+                        <div class="d-grid">
+                            {{ password_form.submit_password(class="btn btn-warning") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

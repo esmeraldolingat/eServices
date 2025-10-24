@@ -4,36 +4,80 @@
     <div class="row justify-content-center">
         <div class="col-md-8">
             <div class="card shadow-sm">
-                <div class="card-header">
+                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h4 class="mb-0">{{ title }}</h4>
+                    <a href="{{ url_for('manage_canned_responses') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-left"></i> Back to Canned Responses List
+                    </a>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="">
+                    <form method="POST" action="" id="canned-response-form">
                         {{ form.hidden_tag() }}
+                        
                         <div class="mb-3">
                             {{ form.department_id.label(class="form-label") }}
-                            {{ form.department_id(class="form-select") }}
-                            {% for error in form.department_id.errors %}
-                                <div class="text-danger small mt-1">{{ error }}</div>
-                            {% endfor %}
+                            {% if form.department_id.errors %}
+                                {{ form.department_id(class="form-select is-invalid", id="department-select") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.department_id.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.department_id(class="form-select", id="department-select") }}
+                            {% endif %}
                         </div>
+
+                        <div class="mb-3">
+                            {{ form.service_id.label(class="form-label") }}
+                            {% if form.service_id.errors %}
+                                {{ form.service_id(class="form-select is-invalid", id="service-select") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.service_id.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.service_id(class="form-select", id="service-select") }}
+                                <small class="form-text text-muted">Select '-- General --' if this response applies to all services in the department.</small>
+                            {% endif %}
+                        </div>
+
                         <div class="mb-3">
                             {{ form.title.label(class="form-label") }}
-                            {{ form.title(class="form-control") }}
-                            {% for error in form.title.errors %}
-                                <div class="text-danger small mt-1">{{ error }}</div>
-                            {% endfor %}
+                            {% if form.title.errors %}
+                                {{ form.title(class="form-control is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.title.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.title(class="form-control") }}
+                                <small class="form-text text-muted">A short title to identify the response (e.g., "Leave Approved").</small>
+                            {% endif %}
                         </div>
+
                         <div class="mb-3">
                             {{ form.body.label(class="form-label") }}
-                            {{ form.body(class="form-control", rows=6) }}
-                            {% for error in form.body.errors %}
-                                <div class="text-danger small mt-1">{{ error }}</div>
-                            {% endfor %}
+                            {% if form.body.errors %}
+                                {{ form.body(class="form-control is-invalid", rows="8") }} {# Mas mataas na rows #}
+                                <div class="invalid-feedback">
+                                    {% for error in form.body.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.body(class="form-control", rows="8") }}
+                            {% endif %}
                         </div>
-                        <div class="d-flex justify-content-end">
-                            <a href="{{ url_for('manage_canned_responses') }}" class="btn btn-outline-secondary me-2">Cancel</a>
-                            {{ form.submit(class="btn btn-primary") }}
+
+                        <div class="d-grid">
+                            {% if 'edit' in request.endpoint %}
+                                <button type="submit" class="btn btn-primary">Update Canned Response</button>
+                            {% else %}
+                                <button type="submit" class="btn btn-primary">Add Canned Response</button>
+                            {% endif %}
                         </div>
                     </form>
                 </div>
@@ -41,5 +85,65 @@
         </div>
     </div>
 </div>
-{% endblock content %}
 
+{# --- SIMULA NG JAVASCRIPT PARA SA DYNAMIC DROPDOWN --- #}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const departmentSelect = document.getElementById('department-select');
+    const serviceSelect = document.getElementById('service-select');
+    // Kunin ang initial value ng service_id kung nag-eedit
+    const initialServiceId = "{{ form.service_id.data if form.service_id.data is not none else '0' }}"; 
+
+    function updateServiceOptions(departmentId, selectedServiceId = '0') {
+        // Clear existing service options except the default '-- General --'
+        serviceSelect.innerHTML = '<option value="0">-- General (All Services) --</option>'; 
+        
+        if (departmentId && departmentId !== '0') {
+            // Fetch services for the selected department
+            fetch(`/admin/_get_services_for_department/${departmentId}`)
+                .then(response => response.json())
+                .then(services => {
+                    if (services.length > 0) {
+                        services.forEach(service => {
+                            const option = document.createElement('option');
+                            option.value = service.id;
+                            option.textContent = service.name;
+                             // Markahan kung ito ang initial selected value habang nag-eedit
+                            if (service.id.toString() === selectedServiceId) {
+                                option.selected = true;
+                            }
+                            serviceSelect.appendChild(option);
+                        });
+                        serviceSelect.disabled = false; // Enable ulit
+                    } else {
+                         serviceSelect.disabled = true; // Disable kung walang services
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching services:', error);
+                    serviceSelect.disabled = true; // Disable on error
+                });
+        } else {
+            serviceSelect.disabled = true; // Disable kung walang department na pinili
+            serviceSelect.value = '0'; // Ibalik sa default
+        }
+    }
+
+    // Initial load ng services kung nag-eedit
+    if (departmentSelect.value && departmentSelect.value !== '0') {
+         updateServiceOptions(departmentSelect.value, initialServiceId);
+    } else {
+        serviceSelect.disabled = true; // Disable service dropdown initially if no department selected
+    }
+
+
+    // Event listener kapag nagbago ang pinili sa Department
+    departmentSelect.addEventListener('change', function() {
+        const selectedDepartmentId = this.value;
+        updateServiceOptions(selectedDepartmentId); // Walang specific service ID kapag nagbago
+    });
+});
+</script>
+{# --- TAPOS NG JAVASCRIPT --- #}
+
+{% endblock content %}
