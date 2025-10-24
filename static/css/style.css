@@ -1,0 +1,109 @@
+/* --- SIMULA NG PAGBABAGO SA KULAY --- */
+:root {
+    --bs-primary: #1f518d; /* Ang bagong primary color mo */
+    --bs-primary-rgb: 31, 81, 141;
+    --bs-link-color: #1f518d;
+    --bs-link-hover-color: #163a64; 
+    
+    /* Pinalitan ang default black/dark text color ng dark blue */
+    --bs-body-color: #163a64; 
+    --bs-body-color-rgb: 22, 58, 100;
+    --bs-dark: #163a64; /* Palitan din ang --bs-dark kung ginagamit sa text */
+    --bs-dark-rgb: 22, 58, 100;
+    --bs-emphasis-color: #102a4a; /* Mas dark pa para sa emphasis */
+
+    /* Ayusin din ang kulay ng text sa dark background (navbar/footer) para sa contrast */
+    --bs-light: #f8f9fa; /* Ensure light text on dark backgrounds */
+    --bs-light-rgb: 248, 249, 250;
+}
+/* Siguraduhing na-override din ang kulay sa pagination at choices highlight */
+.pagination .page-link {
+    color: var(--bs-primary);
+}
+.pagination .page-item.active .page-link {
+     background-color: var(--bs-primary);
+     border-color: var(--bs-primary);
+}
+
+/* --- ITO ANG INAYOS PARA SA DROPDOWN HOVER --- */
+.choices__list--dropdown .choices__item--selectable.is-highlighted {
+     background-color: #cfe0f1; /* Light blue highlight */
+     color: var(--bs-body-color); /* Dark blue text */
+     font-weight: bold; /* Gawing bold ang text kapag naka-highlight */
+}
+/* --- TAPOS NG PAGBABAGO SA DROPDOWN HOVER --- */
+
+/* Tiyaking ang text sa dropdown ay gumagamit ng bagong body color */
+.dropdown-menu {
+     --bs-dropdown-color: var(--bs-body-color);
+     --bs-dropdown-link-color: var(--bs-body-color);
+     --bs-dropdown-link-hover-bg: #e9ecef; /* Light gray hover background */
+     --bs-dropdown-link-hover-color: var(--bs-emphasis-color);
+     --bs-dropdown-link-active-color: #fff;
+     --bs-dropdown-link-active-bg: var(--bs-primary);
+     /* Tinanggal ang maling 'font-weight: bold;' dito */
+}
+ /* Palitan ang text color sa footer na light gray (bg-light) */
+footer.bg-light {
+     color: var(--bs-body-color); /* Use the dark blue */
+}
+
+/* --- TAPOS NG PAGBABAGO SA KULAY --- */
+
+.navbar-brand img {
+    max-height: 40px; /* Adjust logo height */
+    margin-right: 10px;
+}
+body {
+    background-color: #f8f9fa; /* Light grey background */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* Ensure footer stays at bottom */
+    color: var(--bs-body-color); /* Set default body text color */
+}
+main {
+    flex: 1; /* Allow main content to grow */
+}
+.card {
+    border: none; /* Remove default card border */
+}
+
+/* Style adjustments for Choices.js to look more like Bootstrap */
+.choices__inner {
+    background-color: var(--bs-body-bg);
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: 0.375rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    min-height: calc(1.5em + 0.75rem + 2px);
+}
+.choices__list--dropdown, .choices__list[aria-expanded] {
+     border-color: var(--bs-border-color);
+     word-break: break-word; /* Ensure long words wrap */
+     z-index: 1050; /* Make dropdown appear above other elements */
+     color: var(--bs-body-color); /* Ensure dropdown text uses body color */
+}
+.choices[data-type*="select-one"].is-open::after {
+    margin-top: -2px;
+    border-color: transparent transparent var(--bs-body-color) transparent;
+}
+ /* Specific style for wrapping text inside Choices.js dropdown */
+.choices__list--dropdown .choices__item {
+    white-space: normal !important; /* Force wrapping */
+    word-wrap: break-word;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+.choices__list--dropdown .choices__item--choice {
+   text-indent: -15px;
+   padding-left: 30px;
+}
+.choices__item--choice .bullet-style::before {
+    content: "•";
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+

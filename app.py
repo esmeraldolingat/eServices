@@ -13,6 +13,9 @@ import io
 from dotenv import load_dotenv
 from sqlalchemy import func, case, extract, or_
 from sqlalchemy.orm import joinedload
+import logging
+from logging.handlers import RotatingFileHandler
+import traceback # Para sa mas detailed error logging
 
 load_dotenv()
 
@@ -29,7 +32,7 @@ from forms import (
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
     ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm,
     UpdateTicketForm, CannedResponseForm, PersonalCannedResponseForm,
-    UpdateProfileForm, ChangePasswordForm # <-- Idinagdag ang bago
+    UpdateProfileForm, ChangePasswordForm
 )
 
 # --- App Initialization and Config ---
@@ -38,13 +41,15 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 app.secret_key = os.getenv('SECRET_KEY')
 
-instance_path = os.path.join(basedir, 'instance')
-os.makedirs(instance_path, exist_ok=True)
-db_filename = os.getenv('DATABASE_FILENAME', 'eservices.db')
-db_path = os.path.join(instance_path, db_filename)
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-
+# --- Database Configuration ---
+MYSQL_USER = os.getenv('MYSQL_USER', 'root')
+MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', '')
+MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
+MYSQL_DB = os.getenv('MYSQL_DB', 'eservices_db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}?charset=utf8mb4'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# --- Other Configurations ---
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -67,6 +72,26 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 mail = Mail(app)
 
+# --- SIMULA NG PAGBABAGO: Logging Setup ---
+if not app.debug: # I-enable lang ang file logging kapag HINDI naka-debug mode
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    # Mag-log sa file, 10MB per file, hanggang 5 backup files
+    file_handler = RotatingFileHandler('logs/eservices.log', maxBytes=10240000, backupCount=5)
+    # Format ng log message: [Timestamp] LEVEL in module: message [pathname:line number]
+    log_format = logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    )
+    file_handler.setFormatter(log_format)
+    # Itakda ang logging level (INFO, WARNING, ERROR, CRITICAL)
+    file_handler.setLevel(logging.INFO)
+    # Idagdag ang handler sa Flask app logger
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('eServices startup') # Mag-log kapag nagsimula ang app
+# --- TAPOS NG PAGBABAGO: Logging Setup ---
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -85,6 +110,7 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or current_user.role != 'Admin':
             flash('You do not have permission to access this page.', 'danger')
+            app.logger.warning(f"Unauthorized access attempt to admin page by user {current_user.email if current_user.is_authenticated else 'Guest'}")
             return redirect(url_for('home'))
         return f(*args, **kwargs)
     return decorated_function
@@ -117,8 +143,11 @@ TCSD e-Services Team
 '''
     try:
         mail.send(msg)
+        app.logger.info(f"New ticket email sent successfully to {ticket.requester_email} for ticket {ticket.ticket_number}")
     except Exception as e:
-        print(f"Error sending new ticket email: {e}")
+        # --- SIMULA NG PAGBABAGO: Logging Error ---
+        app.logger.error(f"Error sending new ticket email to {ticket.requester_email} for ticket {ticket.ticket_number}: {e}\n{traceback.format_exc()}")
+        # --- TAPOS NG PAGBABAGO ---
 
 def send_staff_notification_email(ticket, response):
     recipients = {manager.email for manager in ticket.service_type.managers}
@@ -127,6 +156,7 @@ def send_staff_notification_email(ticket, response):
         recipients.add(admin.email)
     
     if not recipients:
+        app.logger.warning(f"No recipients found for staff notification for ticket {ticket.ticket_number}")
         return
 
     msg = Message(f'New Response on Ticket #{ticket.ticket_number}',
@@ -153,8 +183,11 @@ e-Services Notifier
 '''
     try:
         mail.send(msg)
+        app.logger.info(f"Staff notification email sent successfully for ticket {ticket.ticket_number}")
     except Exception as e:
-        print(f"Error sending staff notification email: {e}")
+        # --- SIMULA NG PAGBABAGO: Logging Error ---
+        app.logger.error(f"Error sending staff notification email for ticket {ticket.ticket_number}: {e}\n{traceback.format_exc()}")
+        # --- TAPOS NG PAGBABAGO ---
 
 def send_reset_email(user):
     token = user.get_reset_token()
@@ -165,8 +198,11 @@ If you did not make this request then simply ignore this email and no changes wi
 '''
     try:
         mail.send(msg)
+        app.logger.info(f"Password reset email sent successfully to {user.email}")
     except Exception as e:
-        print(f"Error sending reset email: {e}")
+        # --- SIMULA NG PAGBABAGO: Logging Error ---
+        app.logger.error(f"Error sending password reset email to {user.email}: {e}\n{traceback.format_exc()}")
+        # --- TAPOS NG PAGBABAGO ---
 
 def send_resolution_email(ticket, response_body):
     msg = Message(f'Update on your Ticket: #{ticket.ticket_number} - RESOLVED',
@@ -185,8 +221,11 @@ TCSD e-Services Team
 '''
     try:
         mail.send(msg)
+        app.logger.info(f"Resolution email sent successfully to {ticket.requester_email} for ticket {ticket.ticket_number}")
     except Exception as e:
-        print(f"Error sending resolution email: {e}")
+        # --- SIMULA NG PAGBABAGO: Logging Error ---
+        app.logger.error(f"Error sending resolution email to {ticket.requester_email} for ticket {ticket.ticket_number}: {e}\n{traceback.format_exc()}")
+        # --- TAPOS NG PAGBABAGO ---
 
 
 # =================================================================
@@ -289,6 +328,7 @@ def home():
 def staff_dashboard():
     if current_user.role not in ['Admin', 'Staff']:
         flash('Access denied.', 'danger')
+        app.logger.warning(f"Unauthorized access attempt to staff dashboard by user {current_user.email}")
         return redirect(url_for('my_tickets'))
         
     page_active = request.args.get('page_active', 1, type=int)
@@ -310,6 +350,7 @@ def staff_dashboard():
         managed_service_ids = [service.id for service in current_user.managed_services]
         if not managed_service_ids:
             flash("You are not assigned to any services. Please contact an administrator.", "warning")
+            app.logger.warning(f"Staff user {current_user.email} has no assigned services.")
             return render_template('staff_dashboard.html', active_tickets=None, resolved_tickets=None, dashboard_summary={}, title="My Managed Tickets", available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter, search_query=search_query)
         base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
 
@@ -495,6 +536,7 @@ def ticket_detail(ticket_id):
     ticket = db.session.get(Ticket, ticket_id)
     if not ticket:
         flash('Ticket not found!', 'error')
+        app.logger.warning(f"Attempt to access non-existent ticket ID: {ticket_id}")
         return redirect(url_for('home'))
     
     is_staff_or_admin = current_user.role == 'Admin' or (current_user.role == 'Staff' and ticket.service_type in current_user.managed_services)
@@ -504,6 +546,7 @@ def ticket_detail(ticket_id):
     else:
         if ticket.requester_email != current_user.email:
              flash('You do not have permission to view this ticket.', 'danger')
+             app.logger.warning(f"Unauthorized attempt by user {current_user.email} to view ticket {ticket_id}")
              return redirect(url_for('home'))
         form = ResponseForm()
 
@@ -519,18 +562,27 @@ def ticket_detail(ticket_id):
             flash('This ticket is already resolved and cannot receive new responses.', 'info')
             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
         
-        if form.attachment.data:
-            file = form.attachment.data
-            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-            filename = f"{timestamp}_{secure_filename(file.filename)}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            db.session.add(Attachment(filename=filename, ticket_id=ticket.id))
+        try: # --- SIMULA NG PAGBABAGO: Error Handling sa File Upload ---
+            if form.attachment.data:
+                file = form.attachment.data
+                timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+                filename = f"{timestamp}_{secure_filename(file.filename)}"
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                db.session.add(Attachment(filename=filename, ticket_id=ticket.id))
+        except Exception as e:
+             app.logger.error(f"Error saving attachment for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+             flash('An error occurred while uploading the attachment. Please try again.', 'danger')
+             # Huwag ituloy ang pag-save ng response kung may error sa attachment
+             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+        # --- TAPOS NG PAGBABAGO ---
             
         response = TicketResponse(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
         db.session.add(response)
         
         if hasattr(form, 'status'):
+            old_status = ticket.status
             ticket.status = form.status.data
+            app.logger.info(f"Ticket {ticket_id} status changed from '{old_status}' to '{ticket.status}' by user {current_user.email}")
             if ticket.status == 'Resolved':
                 send_resolution_email(ticket, form.body.data)
                 flash('Your response has been added and a resolution email has been sent.', 'success')
@@ -551,32 +603,31 @@ def ticket_detail(ticket_id):
     
     return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, system_canned_responses=system_canned_responses, personal_canned_responses=personal_canned_responses)
 
-# --- BAGONG ROUTE PARA SA PROFILE PAGE ---
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
     profile_form = UpdateProfileForm()
     password_form = ChangePasswordForm()
 
-    # Check which form was submitted using the submit button's name attribute
     if 'submit_profile' in request.form and profile_form.validate_on_submit():
+        old_name = current_user.name
         current_user.name = profile_form.name.data
         db.session.commit()
+        app.logger.info(f"User {current_user.email} updated name from '{old_name}' to '{current_user.name}'")
         flash('Your profile has been updated.', 'success')
         return redirect(url_for('profile'))
     elif 'submit_password' in request.form and password_form.validate_on_submit():
         current_user.set_password(password_form.new_password.data)
         db.session.commit()
+        app.logger.info(f"User {current_user.email} changed their password successfully.")
         flash('Your password has been changed successfully.', 'success')
         return redirect(url_for('profile'))
 
-    # Pre-populate profile form on GET request or if validation failed
-    if request.method == 'GET' or not profile_form.validate():
+    if request.method == 'GET' or ('submit_profile' in request.form and not profile_form.validate()):
         profile_form.name.data = current_user.name
-        profile_form.email.data = current_user.email # Email cannot be changed
+        profile_form.email.data = current_user.email 
 
     return render_template('profile.html', title='My Profile', profile_form=profile_form, password_form=password_form)
-# --- TAPOS NG BAGONG ROUTE ---
 
 @app.route('/admin/dashboard')
 @login_required
@@ -598,6 +649,7 @@ def edit_user(user_id):
     user = db.session.get(User, user_id)
     if not user:
         flash('User not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to edit non-existent user ID: {user_id}")
         return redirect(url_for('manage_users'))
     
     form = EditUserForm(obj=user)
@@ -613,6 +665,7 @@ def edit_user(user_id):
             if service:
                 user.managed_services.append(service)
         db.session.commit()
+        app.logger.info(f"Admin {current_user.email} updated user profile for {user.email}")
         flash(f'User {user.name} has been updated successfully!', 'success')
         return redirect(url_for('manage_users'))
     
@@ -633,13 +686,17 @@ def edit_user(user_id):
 def delete_user(user_id):
     user = db.session.get(User, user_id)
     if user and user.id != current_user.id:
+        user_email = user.email # Kunin ang email bago i-delete
         db.session.delete(user)
         db.session.commit()
+        app.logger.info(f"Admin {current_user.email} deleted user {user_email}")
         flash(f'User {user.name} has been deleted.', 'success')
     elif user and user.id == current_user.id:
         flash('You cannot delete your own account.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to delete their own account.")
     else:
         flash('User not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent user ID: {user_id}")
     return redirect(url_for('manage_users'))
 
 @app.route('/admin/authorized-emails', methods=['GET', 'POST'])
@@ -655,27 +712,31 @@ def manage_authorized_emails():
         email_ids_to_delete = request.form.getlist('email_ids')
         if email_ids_to_delete:
             emails_to_delete_objects = AuthorizedEmail.query.filter(AuthorizedEmail.id.in_(email_ids_to_delete)).all()
+            deleted_count = len(emails_to_delete_objects)
             for email_obj in emails_to_delete_objects:
                 db.session.delete(email_obj)
             db.session.commit()
-            flash(f'{len(email_ids_to_delete)} email(s) have been deleted.', 'success')
+            app.logger.info(f"Admin {current_user.email} deleted {deleted_count} authorized emails via bulk action.")
+            flash(f'{deleted_count} email(s) have been deleted.', 'success')
         else:
             flash('No emails were selected for deletion.', 'warning')
         return redirect(url_for('manage_authorized_emails', search=search_query, page=page))
 
     if add_form.validate_on_submit() and add_form.submit.data:
-        new_email = AuthorizedEmail(email=add_form.email.data)
+        new_email_addr = add_form.email.data
+        new_email = AuthorizedEmail(email=new_email_addr)
         db.session.add(new_email)
         db.session.commit()
-        flash(f'Email {add_form.email.data} has been authorized.', 'success')
+        app.logger.info(f"Admin {current_user.email} added authorized email: {new_email_addr}")
+        flash(f'Email {new_email_addr} has been authorized.', 'success')
         return redirect(url_for('manage_authorized_emails'))
         
     if bulk_form.validate_on_submit() and bulk_form.submit_bulk.data:
         csv_file = bulk_form.csv_file.data
+        added_count, duplicate_count = 0, 0
         try:
             stream = io.StringIO(csv_file.read().decode("UTF8"), newline=None)
             csv_reader = csv.reader(stream)
-            added_count, duplicate_count = 0, 0
             for row in csv_reader:
                 if row and row[0].strip():
                     email = row[0].strip()
@@ -685,8 +746,10 @@ def manage_authorized_emails():
                     else:
                         duplicate_count += 1
             if added_count > 0: db.session.commit()
+            app.logger.info(f"Admin {current_user.email} performed bulk email upload. Added: {added_count}, Skipped: {duplicate_count}.")
             flash(f'Bulk upload complete. Added: {added_count} new emails. Duplicates skipped: {duplicate_count}.', 'info')
         except Exception as e:
+            app.logger.error(f"Error processing bulk email upload by admin {current_user.email}: {e}\n{traceback.format_exc()}")
             flash(f'Error processing bulk upload: {e}', 'danger')
         return redirect(url_for('manage_authorized_emails'))
     
@@ -704,11 +767,14 @@ def manage_authorized_emails():
 def delete_authorized_email(email_id):
     email_to_delete = db.session.get(AuthorizedEmail, email_id)
     if email_to_delete:
+        email_addr = email_to_delete.email
         db.session.delete(email_to_delete)
         db.session.commit()
-        flash(f'Email {email_to_delete.email} has been removed from the authorized list.', 'success')
+        app.logger.info(f"Admin {current_user.email} deleted authorized email: {email_addr}")
+        flash(f'Email {email_addr} has been removed from the authorized list.', 'success')
     else:
         flash('Email not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent authorized email ID: {email_id}")
     return redirect(url_for('manage_authorized_emails'))
 
 @app.route('/admin/departments')
@@ -724,10 +790,12 @@ def manage_departments():
 def add_department():
     form = DepartmentForm()
     if form.validate_on_submit():
-        new_dept = Department(name=form.name.data)
+        dept_name = form.name.data
+        new_dept = Department(name=dept_name)
         db.session.add(new_dept)
         db.session.commit()
-        flash(f'Department "{form.name.data}" has been created.', 'success')
+        app.logger.info(f"Admin {current_user.email} added new department: {dept_name}")
+        flash(f'Department "{dept_name}" has been created.', 'success')
         return redirect(url_for('manage_departments'))
     return render_template('admin/add_edit_department.html', form=form, title='Add Department')
 
@@ -738,16 +806,21 @@ def edit_department(dept_id):
     dept = db.session.get(Department, dept_id)
     if not dept:
         flash('Department not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to edit non-existent department ID: {dept_id}")
         return redirect(url_for('manage_departments'))
+    
+    original_name = dept.name
     form = DepartmentForm(obj=dept)
     if form.validate_on_submit():
         existing_dept = Department.query.filter(Department.name == form.name.data, Department.id != dept_id).first()
         if existing_dept:
             flash('That department name already exists.', 'danger')
         else:
-            dept.name = form.name.data
+            new_name = form.name.data
+            dept.name = new_name
             db.session.commit()
-            flash(f'Department has been updated to "{form.name.data}".', 'success')
+            app.logger.info(f"Admin {current_user.email} updated department name from '{original_name}' to '{new_name}'")
+            flash(f'Department has been updated to "{new_name}".', 'success')
             return redirect(url_for('manage_departments'))
     return render_template('admin/add_edit_department.html', form=form, title='Edit Department', department=dept)
 
@@ -757,21 +830,25 @@ def edit_department(dept_id):
 def delete_department(dept_id):
     dept_to_delete = db.session.get(Department, dept_id)
     if dept_to_delete:
+        dept_name = dept_to_delete.name
         if dept_to_delete.tickets:
-            flash(f'Cannot delete department "{dept_to_delete.name}" because it has existing tickets.', 'danger')
+            flash(f'Cannot delete department "{dept_name}" because it has existing tickets.', 'danger')
+            app.logger.warning(f"Admin {current_user.email} failed to delete department '{dept_name}' due to existing tickets.")
             return redirect(url_for('manage_departments'))
         db.session.delete(dept_to_delete)
         db.session.commit()
-        flash(f'Department "{dept_to_delete.name}" has been deleted.', 'success')
+        app.logger.info(f"Admin {current_user.email} deleted department: {dept_name}")
+        flash(f'Department "{dept_name}" has been deleted.', 'success')
     else:
         flash('Department not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent department ID: {dept_id}")
     return redirect(url_for('manage_departments'))
 
 @app.route('/admin/canned-responses')
 @login_required
 @admin_required
 def manage_canned_responses():
-    responses = CannedResponse.query.join(Department).order_by(Department.name, CannedResponse.title).all()
+    responses = CannedResponse.query.options(joinedload(CannedResponse.department), joinedload(CannedResponse.service)).order_by(Department.name, CannedResponse.title).all()
     return render_template('admin/canned_responses.html', responses=responses, title='Manage Canned Responses')
 
 @app.route('/admin/canned-response/add', methods=['GET', 'POST'])
@@ -793,6 +870,7 @@ def add_canned_response():
             new_response = CannedResponse(title=form.title.data, body=form.body.data, department_id=form.department_id.data, service_id=service_id_val)
             db.session.add(new_response)
             db.session.commit()
+            app.logger.info(f"Admin {current_user.email} added new canned response: '{form.title.data}'")
             flash(f'Canned response "{form.title.data}" has been created.', 'success')
             return redirect(url_for('manage_canned_responses'))
     
@@ -805,8 +883,10 @@ def edit_canned_response(response_id):
     response = db.session.get(CannedResponse, response_id)
     if not response:
         flash('Canned response not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to edit non-existent canned response ID: {response_id}")
         return redirect(url_for('manage_canned_responses'))
     
+    original_title = response.title
     form = CannedResponseForm(obj=response)
     form.department_id.choices = [(d.id, d.name) for d in Department.query.order_by('name')]
     
@@ -825,6 +905,7 @@ def edit_canned_response(response_id):
             response.department_id = form.department_id.data
             response.service_id = form.service_id.data if form.service_id.data != 0 else None
             db.session.commit()
+            app.logger.info(f"Admin {current_user.email} updated canned response ID {response_id} (Title: '{response.title}')")
             flash(f'Canned response "{form.title.data}" has been updated.', 'success')
             return redirect(url_for('manage_canned_responses'))
             
@@ -847,11 +928,14 @@ def _get_services_for_department(dept_id):
 def delete_canned_response(response_id):
     response = db.session.get(CannedResponse, response_id)
     if response:
+        response_title = response.title
         db.session.delete(response)
         db.session.commit()
-        flash(f'Canned response "{response.title}" has been deleted.', 'success')
+        app.logger.info(f"Admin {current_user.email} deleted canned response: '{response_title}'")
+        flash(f'Canned response "{response_title}" has been deleted.', 'success')
     else:
         flash('Canned response not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent canned response ID: {response_id}")
     return redirect(url_for('manage_canned_responses'))
 
 @app.route('/my-responses', methods=['GET', 'POST'])
@@ -868,6 +952,7 @@ def manage_my_responses():
         new_response = PersonalCannedResponse(title=form.title.data, body=form.body.data, owner=current_user)
         db.session.add(new_response)
         db.session.commit()
+        app.logger.info(f"User {current_user.email} added new personal response: '{form.title.data}'")
         flash('Your new personal response has been saved!', 'success')
         return redirect(url_for('manage_my_responses', ticket_id=ticket_id)) # Ipasa ulit ang ticket_id
 
@@ -883,6 +968,7 @@ def edit_my_response(response_id):
 
     if not response or response.user_id != current_user.id or current_user.role not in ['Admin', 'Staff']:
         flash('Error: Response not found or you do not have permission to edit it.', 'danger')
+        app.logger.warning(f"User {current_user.email} attempted to edit unauthorized/non-existent personal response ID: {response_id}")
         return redirect(url_for('manage_my_responses', ticket_id=ticket_id))
 
     form = PersonalCannedResponseForm(obj=response) 
@@ -891,6 +977,7 @@ def edit_my_response(response_id):
         response.title = form.title.data
         response.body = form.body.data
         db.session.commit()
+        app.logger.info(f"User {current_user.email} updated personal response ID {response_id}")
         flash('Your personal response has been updated.', 'success')
         return redirect(url_for('manage_my_responses', ticket_id=ticket_id)) 
 
@@ -904,11 +991,14 @@ def delete_my_response(response_id):
     ticket_id = request.args.get('ticket_id') # Kunin para sa redirect
     
     if response and response.user_id == current_user.id:
+        response_title = response.title
         db.session.delete(response)
         db.session.commit()
+        app.logger.info(f"User {current_user.email} deleted personal response: '{response_title}'")
         flash('Your personal response has been deleted.', 'success')
     else:
         flash('Error: Response not found or you do not have permission to delete it.', 'danger')
+        app.logger.warning(f"User {current_user.email} attempted to delete unauthorized/non-existent personal response ID: {response_id}")
         
     return redirect(url_for('manage_my_responses', ticket_id=ticket_id)) # Bumalik sa listahan
 
@@ -967,10 +1057,16 @@ def create_ticket_form(service_id):
         saved_filenames = []
         for field in form:
             if field.type == 'FileField' and hasattr(field, 'data') and field.data:
-                file = field.data
-                filename = secure_filename(f"{field.name}_{file.filename}")
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                saved_filenames.append(filename)
+                try: # --- SIMULA NG PAGBABAGO: Error Handling sa File Upload ---
+                    file = field.data
+                    filename = secure_filename(f"{field.name}_{file.filename}")
+                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    saved_filenames.append(filename)
+                except Exception as e:
+                    app.logger.error(f"Error saving attachment during ticket creation for service {service_id}: {e}\n{traceback.format_exc()}")
+                    flash(f'An error occurred while uploading file for {field.label.text}. Please try again.', 'danger')
+                    return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
+                 # --- TAPOS NG PAGBABAGO ---
                 
         current_year = datetime.now(timezone.utc).year
         dept_code_map = {"ICT": "ICT", "Personnel": "PERS", "Legal Services": "LEGAL", "Office of the SDS": "SDS", "Accounting Unit": "ACCT", "Supply Office": "SUP"}
@@ -992,20 +1088,24 @@ def create_ticket_form(service_id):
             details=details_data
         )
         db.session.add(new_ticket)
-        db.session.commit()
+        db.session.commit() # Commit muna para makuha ang ID
         
+        # Attach files using the new ticket ID
         for fname in saved_filenames:
             db.session.add(Attachment(filename=fname, ticket_id=new_ticket.id))
-        db.session.commit()
+        db.session.commit() # Commit ulit para sa attachments
         
+        app.logger.info(f"New ticket {new_ticket_number} created by {form.requester_email.data} for service '{service.name}'")
         send_new_ticket_email(new_ticket)
         flash(f'Your ticket has been created! A confirmation has been sent to your email. Your ticket number is {new_ticket_number}.', 'success')
         
         if current_user.is_authenticated:
             return redirect(url_for('my_tickets'))
         else:
-            return redirect(url_for('select_department'))
+            # Para sa mga hindi naka-login (kung papayagan mo), pwedeng thank you page
+            return redirect(url_for('select_department')) # O kaya sa home/login
 
+    # Kung GET request o nag-fail ang validation, i-render ang form
     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -1014,10 +1114,12 @@ def register():
         return redirect(url_for('home'))
     form = RegistrationForm()
     if form.validate_on_submit():
-        user = User(name=form.name.data, email=form.email.data, role='User')
+        user_email = form.email.data
+        user = User(name=form.name.data, email=user_email, role='User')
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
+        app.logger.info(f"New user registered: {user_email}")
         flash('Your account has been created! You are now able to log in.', 'success')
         return redirect(url_for('login'))
     return render_template('register.html', form=form, title='Register')
@@ -1031,16 +1133,20 @@ def login():
         user = User.query.filter_by(email=form.username.data).first()
         if user and user.check_password(form.password.data):
             login_user(user)
+            app.logger.info(f"User {user.email} logged in successfully.")
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('home'))
         else:
+            app.logger.warning(f"Failed login attempt for email: {form.username.data}")
             flash('Login Unsuccessful. Please check email and password', 'danger')
     return render_template('login.html', form=form, title='Login')
 
 @app.route('/logout')
 @login_required
 def logout():
+    user_email = current_user.email
     logout_user()
+    app.logger.info(f"User {user_email} logged out.")
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
@@ -1053,6 +1159,10 @@ def reset_request():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
             send_reset_email(user)
+            app.logger.info(f"Password reset requested for user: {form.email.data}")
+        else:
+            # Huwag sabihin kung existing ang email for security
+            app.logger.warning(f"Password reset requested for non-existent email: {form.email.data}")
         flash('An email has been sent with instructions to reset your password (if the email exists in our system).', 'info')
         return redirect(url_for('login'))
     return render_template('request_reset.html', title='Reset Password', form=form)
@@ -1064,15 +1174,36 @@ def reset_token(token):
     user = User.verify_reset_token(token)
     if user is None:
         flash('That is an invalid or expired token', 'warning')
+        app.logger.warning(f"Invalid or expired password reset token used.")
         return redirect(url_for('reset_request'))
     form = ResetPasswordForm()
     if form.validate_on_submit():
         user.set_password(form.password.data)
         db.session.commit()
+        app.logger.info(f"Password reset successfully for user: {user.email}")
         flash('Your password has been updated! You are now able to log in', 'success')
         return redirect(url_for('login'))
     return render_template('reset_token.html', title='Reset Password', form=form)
 
+# --- SIMULA NG PAGBABAGO: General Error Handler ---
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Pass through HTTP errors
+    if isinstance(e, HTTPException):
+        return e
+    # Log non-HTTP exceptions
+    app.logger.error(f"An unexpected error occurred: {e}\n{traceback.format_exc()}")
+    # Maaari kang mag-render ng custom 500 error page dito
+    return render_template("500.html"), 500 # Siguraduhing may templates/500.html ka
+# --- TAPOS NG PAGBABAGO ---
+
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    # --- SIMULA NG PAGBABAGO: App Run Config ---
+    # Mas maganda kung hindi 'debug=True' sa production
+    # Ang logging ay iha-handle na ng setup sa taas
+    app.run(host='0.0.0.0', port=5000) # Listen on all interfaces
+    # --- TAPOS NG PAGBABAGO ---
+
+    
 

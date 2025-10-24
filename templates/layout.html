@@ -37,10 +37,14 @@
              background-color: var(--bs-primary);
              border-color: var(--bs-primary);
         }
+        
+        /* --- ITO ANG BINAGO PARA SA DROPDOWN HOVER --- */
         .choices__list--dropdown .choices__item--selectable.is-highlighted {
-             background-color: var(--bs-primary);
-             color: white; /* Make text white when highlighted */
+             background-color: #cfe0f1; /* Light blue highlight */
+             color: var(--bs-body-color); /* Dark blue text */
         }
+        /* --- TAPOS NG PAGBABAGO SA DROPDOWN HOVER --- */
+        
         /* Tiyaking ang text sa dropdown ay gumagamit ng bagong body color */
         .dropdown-menu {
              --bs-dropdown-color: var(--bs-body-color);
@@ -119,7 +123,8 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('home') }}">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('home') }}">
+                <img src="{{ url_for('static', filename='images/logo_TCSD_header.png') }}" alt="TCSD Logo" style="height: 40px; width: auto; margin-right: 10px;">
                 TCSD e-Services
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
