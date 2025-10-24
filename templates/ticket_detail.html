@@ -1,21 +1,16 @@
 {% extends "layout.html" %}
 {% block content %}
-<!-- SIMULA NG PAGBABAGO: Pinalitan ang <style> ng library links -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
-<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-<!-- TAPOS NG PAGBABAGO -->
-
 <div class="container my-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <!-- Back Button -->
         {% if is_staff_or_admin %}
-            <a href="{{ url_for('staff_dashboard') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> Back to Staff Dashboard
-            </a>
+            {% if request.referrer and request.referrer != request.url %}
+                <a href="{{ request.referrer }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
+            {% else %}
+                 <a href="{{ url_for('staff_dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+            {% endif %}
         {% else %}
-             <a href="{{ url_for('my_tickets') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-arrow-left"></i> Back to My Tickets
-            </a>
+             <a href="{{ url_for('my_tickets') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to My Tickets</a>
         {% endif %}
     </div>
 
@@ -31,7 +26,7 @@
                     {% elif ticket.status == 'In Progress' %}
                         <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
                     {% else %}
-                        <span class="badge bg-secondary">{{ ticket.status }}</span>
+                        <span class="badge bg-primary">{{ ticket.status }}</span> {# Pinalitan na natin ito ng blue #}
                     {% endif %}
                 </div>
                 <div class="card-body">
@@ -53,6 +48,7 @@
                     {% if ticket.details %}
                         {% for key, value in ticket.details.items() %}
                             {% if 'other' in key.lower() and ticket.details.get(key.replace('_other', '')) != 'Other' %}
+                                <!-- Huwag ipakita -->
                             {% elif value and value != 'N/A' %}
                                 <p class="card-text mb-2">
                                     <strong>{{ key.replace('_', ' ').title() }}:</strong> 
@@ -85,13 +81,14 @@
             <!-- Responses/Comments Section -->
             <h4 class="mb-3"><i class="bi bi-chat-dots-fill me-2"></i>Conversation History</h4>
             {% if ticket.responses %}
-                {% for response in ticket.responses|sort(attribute='date_posted') %}
-                <div class="card mb-3 {% if response.author.role in ['Admin', 'Staff'] %}bg-light{% endif %}">
+                {% for response in ticket.responses %}
+                <div class="card mb-3">
                     <div class="card-body">
-                        <p class="card-text">{{ response.body | safe }}</p>
+                        {# Tinitiyak ng |safe na mare-render ang HTML formatting #}
+                        <p class="card-text">{{ response.body | safe }}</p> 
                     </div>
                     <div class="card-footer text-muted small">
-                        by <strong>{{ response.author.name }}</strong> ({{ response.author.role }}) on {{ response.date_posted.strftime('%B %d, %Y at %I:%M %p') }}
+                        by <strong>{{ response.author.name }}</strong> on {{ response.date_posted.strftime('%B %d, %Y at %I:%M %p') }}
                     </div>
                 </div>
                 {% endfor %}
@@ -104,13 +101,14 @@
 
         <!-- Right Column: Action Form -->
         <div class="col-lg-4">
+            <!-- Add a Response Form (with logic to hide if resolved) -->
             {% if ticket.status != 'Resolved' or is_staff_or_admin %}
             <div class="card sticky-top" style="top: 20px;">
                 <div class="card-header">
                     <h6 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Take Action</h6>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="" enctype="multipart/form-data" novalidate>
+                    <form method="POST" action="" enctype="multipart/form-data">
                         {{ form.hidden_tag() }}
                         
                         {% if form.status %}
@@ -120,25 +118,23 @@
                         </div>
                         {% endif %}
 
-                        <!-- --- SIMULA NG BAGONG CANNED RESPONSE DROPDOWN --- -->
+                        <!-- Canned Response Dropdown -->
                         {% if is_staff_or_admin and (system_canned_responses or personal_canned_responses) %}
                         <div class="mb-3">
                             <label for="canned-response-select" class="form-label">Use Canned Response (Optional)</label>
-                            <select id="canned-response-select" class="form-select">
+                            <select id="canned-response-select" class="form-select choices-select">
                                 <option value="">-- Select a response --</option>
-                                
                                 {% if personal_canned_responses %}
                                     <optgroup label="My Personal Responses">
                                         {% for canned in personal_canned_responses %}
-                                            <option value="{{ canned.body }}"> • {{ canned.body }}</option>
+                                            <option value="{{ canned.body }}">{{ canned.body }}</option>
                                         {% endfor %}
                                     </optgroup>
                                 {% endif %}
-
                                 {% if system_canned_responses %}
-                                    <optgroup label="System Responses ({{ ticket.service_type.name }})">
+                                    <optgroup label="System Responses ({{ ticket.ticket_department.name }})">
                                         {% for canned in system_canned_responses %}
-                                            <option value="{{ canned.body }}"> • {{ canned.body }}</option>
+                                            <option value="{{ canned.body }}">{{ canned.body }}</option>
                                         {% endfor %}
                                     </optgroup>
                                 {% endif %}
@@ -148,20 +144,11 @@
                             </div>
                         </div>
                         {% endif %}
-                        <!-- --- TAPOS NG BAGONG CANNED RESPONSE DROPDOWN --- -->
 
                         <div class="mb-3">
                             {{ form.body.label(class="form-label") }}
-                            {% if form.body.errors %}
-                                {{ form.body(class="form-control is-invalid", rows="5", id="response-body-textarea") }}
-                                <div class="invalid-feedback">
-                                    {% for error in form.body.errors %}
-                                        <span>{{ error }}</span>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                {{ form.body(class="form-control", rows="5", id="response-body-textarea") }}
-                            {% endif %}
+                            {# Ito na ang textarea na gagawing rich text editor #}
+                            {{ form.body(class="form-control", rows="5", id="response-body-textarea") }} 
                         </div>
 
                         <div class="mb-3">
@@ -183,39 +170,118 @@
                 This ticket has been resolved and is now closed for comments.
             </div>
             {% endif %}
+
+            {# --- SIMULA NG PAGBABAGO: Admin Delete Button --- #}
+            {% if current_user.role == 'Admin' %}
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Admin Actions</h6>
+                </div>
+                <div class="card-body text-center">
+                    <p class="text-muted small">This action cannot be undone. It will permanently delete this ticket and all its responses and attachments.</p>
+                    <form action="{{ url_for('delete_ticket', ticket_id=ticket.id) }}" method="POST" onsubmit="return confirm('WARNING: Are you sure you want to permanently delete this ticket? This action cannot be undone.');">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash-fill me-2"></i>Delete This Ticket
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+            {# --- TAPOS NG PAGBABAGO --- #}
+
         </div>
     </div>
 </div>
 
-<!-- SIMULA NG PAGBABAGO: JavaScript para sa Choices.js -->
+
+<!-- TinyMCE Script -->
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
+
+<!-- Choices.js (para sa Canned Responses dropdown) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const cannedSelectElement = document.getElementById('canned-response-select');
-    const responseTextarea = document.getElementById('response-body-textarea');
+    // Initialize TinyMCE
+    tinymce.init({
+        selector: '#response-body-textarea',
+        plugins: 'lists link image table code help wordcount',
+        toolbar: 'undo redo | blocks | bold italic | bullist numlist | link image | code help',
+        height: 250, // Adjust height as needed
+        menubar: false, // Optional: remove the top menu bar
+        setup: function (editor) {
+            editor.on('change', function () {
+                editor.save(); // Important: Update the underlying textarea on change
+            });
+        }
+    });
 
-    if (cannedSelectElement && responseTextarea) {
-        // I-initialize ang Choices.js sa ating select element
+    // Initialize Choices.js for Canned Responses
+    const cannedSelectElement = document.querySelector('.choices-select');
+    if (cannedSelectElement) {
         const choices = new Choices(cannedSelectElement, {
-            searchEnabled: false, // Gawing 'true' kung gusto mo ng search bar
-            itemSelectText: 'Press to select',
-            shouldSort: false, // Para manatili ang order (Personal muna bago System)
-            // Ang Choices.js ay awtomatikong mag-wrap ng text
+            searchEnabled: true, // Pwede mag-search sa dropdown
+            itemSelectText: '', // Text kapag pinili
+            allowHTML: false, // Important for security
+            classNames: { // Para magmukhang Bootstrap
+                 containerOuter: 'choices',
+                 containerInner: 'choices__inner',
+                 input: 'choices__input',
+                 inputCloned: 'choices__input--cloned',
+                 list: 'choices__list',
+                 listItems: 'choices__list--multiple',
+                 listSingle: 'choices__list--single',
+                 listDropdown: 'choices__list--dropdown',
+                 item: 'choices__item',
+                 itemSelectable: 'choices__item--selectable',
+                 itemDisabled: 'choices__item--disabled',
+                 itemChoice: 'choices__item--choice',
+                 placeholder: 'choices__placeholder',
+                 group: 'choices__group',
+                 groupHeading : 'choices__heading',
+                 button: 'choices__button',
+                 activeState: 'is-active',
+                 focusState: 'is-focused',
+                 openState: 'is-open',
+                 disabledState: 'is-disabled',
+                 highlightedState: 'is-highlighted',
+                 selectedState: 'is-selected',
+                 flippedState: 'is-flipped',
+                 loadingState: 'is-loading',
+                 noResults: 'has-no-results',
+                 noChoices: 'has-no-choices'
+            },
+            // Custom function para ipakita ang buong text sa dropdown list
+            callbackRenderChoice: function(choice) {
+                const el = document.createElement('div');
+                el.classList.add('choices__item', 'choices__item--choice', 'choices__item--selectable');
+                el.dataset.choiceSelectable = '';
+                el.dataset.id = choice.id;
+                el.dataset.value = choice.value;
+                el.textContent = choice.label; // Display the full body text
+                // Add styles for wrapping and list look
+                el.style.whiteSpace = 'normal'; // Allow wrapping
+                el.style.paddingLeft = '25px'; // Indent text
+                el.style.position = 'relative'; 
+                // Add a pseudo-element for the bullet
+                el.style.setProperty('--bullet-content', '"•"'); 
+                el.insertAdjacentHTML('afterbegin', '<span class="bullet-style"></span>');
+                
+                return el;
+            }
         });
 
-        // Mag-listen sa 'change' event ng Choices.js
+        // Event listener para ilagay ang text sa TinyMCE
         cannedSelectElement.addEventListener('change', function(event) {
-            // Ang value ay nasa event.detail.value
             const selectedValue = event.detail.value;
             if (selectedValue) {
-                responseTextarea.value = selectedValue;
-                // I-auto-adjust ang height ng textarea
-                responseTextarea.style.height = 'auto';
-                responseTextarea.style.height = (responseTextarea.scrollHeight) + 'px';
+                tinymce.get('response-body-textarea').setContent(selectedValue);
             }
         });
     }
+
 });
 </script>
-<!-- TAPOS NG PAGBABAGO -->
 {% endblock content %}
 

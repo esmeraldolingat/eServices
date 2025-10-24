@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                 <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">{{ title }}</h4>
+                    {# Back button - Babalik sa Manage Services page #}
+                    <a href="{{ url_for('manage_services') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-left"></i> Back to Services
+                    </a>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-3">
+                            {{ form.name.label(class="form-label") }}
+                            {% if form.name.errors %}
+                                {{ form.name(class="form-control is-invalid", placeholder="Enter service name") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.name.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.name(class="form-control", placeholder="Enter service name") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.department_id.label(class="form-label") }}
+                            {% if form.department_id.errors %}
+                                {{ form.department_id(class="form-select is-invalid") }}
+                                <div class="invalid-feedback">
+                                    {% for error in form.department_id.errors %}
+                                        <span>{{ error }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {{ form.department_id(class="form-select") }}
+                            {% endif %}
+                        </div>
+
+                        <div class="d-grid">
+                            {% if service %} {# Kung nag-eedit tayo #}
+                                <button type="submit" class="btn btn-primary">Update Service</button>
+                            {% else %} {# Kung nag-aadd tayo #}
+                                <button type="submit" class="btn btn-primary">Add Service</button>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

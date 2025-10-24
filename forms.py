@@ -3,10 +3,10 @@ from wtforms import StringField, SelectField, SubmitField, PasswordField, TextAr
 from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, EqualTo
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from sqlalchemy import case
-from flask_login import current_user # <-- ITO ANG IDINAGDAG NA IMPORT
+from flask_login import current_user
 
 # Import all necessary models
-from models import School, AuthorizedEmail, User, Department
+from models import School, AuthorizedEmail, User, Department, Service
 
 # ======================================================
 # === CUSTOM VALIDATOR =================================
@@ -61,17 +61,24 @@ class DepartmentForm(FlaskForm):
 
     def validate_name(self, name):
         """Checks if the department name already exists."""
+        # Note: Ang validation na ito ay para sa Add form. Ang Edit form ay may hiwalay na logic sa app.py
         existing_dept = Department.query.filter_by(name=name.data).first()
         if existing_dept:
             raise ValidationError('That department name already exists.')
 
+# --- BAGONG FORM PARA SA SERVICES ---
+class ServiceForm(FlaskForm):
+    name = StringField('Service Name', validators=[DataRequired()])
+    department_id = SelectField('Department', coerce=int, validators=[DataRequired(message="Please select a department.")])
+    submit = SubmitField('Save Service')
+# --- TAPOS NG BAGONG FORM ---
+
 class CannedResponseForm(FlaskForm):
     title = StringField('Response Title (e.g., "Password Reset Steps")', validators=[DataRequired()])
     body = TextAreaField('Response Body (This is the text that will be inserted)', validators=[DataRequired()])
-    department_id = SelectField('Department', coerce=int, validators=[DataRequired()])
-    service_id = SelectField('Specific Service (Optional)', coerce=int, validators=[Optional()]) # Added service_id
+    department_id = SelectField('Department', coerce=int, validators=[DataRequired(message="Please select a department.")])
+    service_id = SelectField('Specific Service (Optional)', coerce=int, validators=[Optional()])
     submit = SubmitField('Save Response')
-
 
 # ======================================================
 # === TICKET & RESPONSE FORMS ==========================
@@ -81,7 +88,7 @@ class GeneralTicketForm(FlaskForm):
     requester_name = StringField('Full Name', validators=[DataRequired()])
     requester_email = StringField('Email Address', validators=[DataRequired(), Email()], render_kw={'readonly': True})
     requester_contact = StringField('Contact Number')
-    school = SelectField('School/Office', coerce=int, validators=[DataRequired()])
+    school = SelectField('School/Office', coerce=int, validators=[DataRequired(message="Please select your school or office.")])
     submit = SubmitField('Submit Ticket')
 
     def __init__(self, *args, **kwargs):
@@ -89,6 +96,11 @@ class GeneralTicketForm(FlaskForm):
         custom_order = case((School.name == "Division Office", 0), else_=1)
         all_schools = School.query.order_by(custom_order, School.name).all()
         self.school.choices = [(0, "-- Select your School/Office --")] + [(s.id, s.name) for s in all_schools]
+    
+    def validate_school(self, field):
+        if field.data == 0:
+            raise ValidationError('Please select your school or office.')
+
 
 class ResponseForm(FlaskForm):
     body = TextAreaField('Your Response', validators=[DataRequired()])
@@ -266,6 +278,8 @@ class IcsForm(GeneralTicketForm):
     position = StringField('Position / Designation', validators=[DataRequired()])
     attachment = FileField('Please attach a copy of your Inventory Custodian Sheet - ICS in PDF format', validators=[FileRequired(), FileAllowed(['pdf'], 'PDF documents only!')])
 
+
+    
 # ======================================================
 # === REGISTRATION & PASSWORD RESET FORMS ==============
 # ======================================================
@@ -296,7 +310,6 @@ class ResetPasswordForm(FlaskForm):
     password = PasswordField('New Password', validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField('Confirm New Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Reset Password')
-
 
 # ======================================================
 # === PERSONAL RESPONSE FORM ===========================

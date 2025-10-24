@@ -16,6 +16,7 @@ from sqlalchemy.orm import joinedload
 import logging
 from logging.handlers import RotatingFileHandler
 import traceback # Para sa mas detailed error logging
+from werkzeug.exceptions import HTTPException 
 
 load_dotenv()
 
@@ -32,7 +33,7 @@ from forms import (
     ProvidentFundForm, IcsForm, RegistrationForm, RequestResetForm, ResetPasswordForm,
     ResponseForm, EditUserForm, AddAuthorizedEmailForm, BulkUploadForm, DepartmentForm,
     UpdateTicketForm, CannedResponseForm, PersonalCannedResponseForm,
-    UpdateProfileForm, ChangePasswordForm
+    UpdateProfileForm, ChangePasswordForm, ServiceForm
 )
 
 # --- App Initialization and Config ---
@@ -72,7 +73,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 mail = Mail(app)
 
-# --- SIMULA NG PAGBABAGO: Logging Setup ---
+# --- Logging Setup ---
 if not app.debug: # I-enable lang ang file logging kapag HINDI naka-debug mode
     if not os.path.exists('logs'):
         os.mkdir('logs')
@@ -89,7 +90,6 @@ if not app.debug: # I-enable lang ang file logging kapag HINDI naka-debug mode
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
     app.logger.info('eServices startup') # Mag-log kapag nagsimula ang app
-# --- TAPOS NG PAGBABAGO: Logging Setup ---
 
 
 @login_manager.user_loader
@@ -145,9 +145,7 @@ TCSD e-Services Team
         mail.send(msg)
         app.logger.info(f"New ticket email sent successfully to {ticket.requester_email} for ticket {ticket.ticket_number}")
     except Exception as e:
-        # --- SIMULA NG PAGBABAGO: Logging Error ---
         app.logger.error(f"Error sending new ticket email to {ticket.requester_email} for ticket {ticket.ticket_number}: {e}\n{traceback.format_exc()}")
-        # --- TAPOS NG PAGBABAGO ---
 
 def send_staff_notification_email(ticket, response):
     recipients = {manager.email for manager in ticket.service_type.managers}
@@ -185,9 +183,7 @@ e-Services Notifier
         mail.send(msg)
         app.logger.info(f"Staff notification email sent successfully for ticket {ticket.ticket_number}")
     except Exception as e:
-        # --- SIMULA NG PAGBABAGO: Logging Error ---
         app.logger.error(f"Error sending staff notification email for ticket {ticket.ticket_number}: {e}\n{traceback.format_exc()}")
-        # --- TAPOS NG PAGBABAGO ---
 
 def send_reset_email(user):
     token = user.get_reset_token()
@@ -200,9 +196,7 @@ If you did not make this request then simply ignore this email and no changes wi
         mail.send(msg)
         app.logger.info(f"Password reset email sent successfully to {user.email}")
     except Exception as e:
-        # --- SIMULA NG PAGBABAGO: Logging Error ---
         app.logger.error(f"Error sending password reset email to {user.email}: {e}\n{traceback.format_exc()}")
-        # --- TAPOS NG PAGBABAGO ---
 
 def send_resolution_email(ticket, response_body):
     msg = Message(f'Update on your Ticket: #{ticket.ticket_number} - RESOLVED',
@@ -223,9 +217,7 @@ TCSD e-Services Team
         mail.send(msg)
         app.logger.info(f"Resolution email sent successfully to {ticket.requester_email} for ticket {ticket.ticket_number}")
     except Exception as e:
-        # --- SIMULA NG PAGBABAGO: Logging Error ---
         app.logger.error(f"Error sending resolution email to {ticket.requester_email} for ticket {ticket.ticket_number}: {e}\n{traceback.format_exc()}")
-        # --- TAPOS NG PAGBABAGO ---
 
 
 # =================================================================
@@ -562,7 +554,7 @@ def ticket_detail(ticket_id):
             flash('This ticket is already resolved and cannot receive new responses.', 'info')
             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
         
-        try: # --- SIMULA NG PAGBABAGO: Error Handling sa File Upload ---
+        try:
             if form.attachment.data:
                 file = form.attachment.data
                 timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
@@ -572,9 +564,7 @@ def ticket_detail(ticket_id):
         except Exception as e:
              app.logger.error(f"Error saving attachment for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
              flash('An error occurred while uploading the attachment. Please try again.', 'danger')
-             # Huwag ituloy ang pag-save ng response kung may error sa attachment
              return redirect(url_for('ticket_detail', ticket_id=ticket.id))
-        # --- TAPOS NG PAGBABAGO ---
             
         response = TicketResponse(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
         db.session.add(response)
@@ -602,6 +592,29 @@ def ticket_detail(ticket_id):
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
     
     return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, system_canned_responses=system_canned_responses, personal_canned_responses=personal_canned_responses)
+
+# --- BAGONG ROUTE: DELETE TICKET (PARA SA ADMIN LANG) ---
+@app.route('/ticket/<int:ticket_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_ticket(ticket_id):
+    ticket_to_delete = db.session.get(Ticket, ticket_id)
+    if ticket_to_delete:
+        ticket_number = ticket_to_delete.ticket_number
+        
+        # Ang 'cascade="all, delete-orphan"' sa models.py
+        # ang bahala sa pag-delete ng related attachments at responses.
+        db.session.delete(ticket_to_delete)
+        db.session.commit()
+        
+        app.logger.info(f"Admin {current_user.email} deleted ticket {ticket_number}")
+        flash(f'Ticket {ticket_number} and all its related responses/attachments have been deleted.', 'success')
+        return redirect(url_for('staff_dashboard'))
+    else:
+        flash('Ticket not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent ticket ID: {ticket_id}")
+        return redirect(url_for('staff_dashboard'))
+# --- TAPOS NG BAGONG ROUTE ---
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -811,17 +824,22 @@ def edit_department(dept_id):
     
     original_name = dept.name
     form = DepartmentForm(obj=dept)
+    
     if form.validate_on_submit():
-        existing_dept = Department.query.filter(Department.name == form.name.data, Department.id != dept_id).first()
-        if existing_dept:
-            flash('That department name already exists.', 'danger')
-        else:
-            new_name = form.name.data
-            dept.name = new_name
-            db.session.commit()
-            app.logger.info(f"Admin {current_user.email} updated department name from '{original_name}' to '{new_name}'")
-            flash(f'Department has been updated to "{new_name}".', 'success')
-            return redirect(url_for('manage_departments'))
+        new_name = form.name.data
+        # Check for uniqueness only if the name has changed
+        if new_name != original_name:
+            existing_dept = Department.query.filter_by(name=new_name).first()
+            if existing_dept:
+                flash('That department name already exists.', 'danger')
+                return render_template('admin/add_edit_department.html', form=form, title='Edit Department', department=dept)
+        
+        dept.name = new_name
+        db.session.commit()
+        app.logger.info(f"Admin {current_user.email} updated department name from '{original_name}' to '{new_name}'")
+        flash(f'Department has been updated to "{new_name}".', 'success')
+        return redirect(url_for('manage_departments'))
+        
     return render_template('admin/add_edit_department.html', form=form, title='Edit Department', department=dept)
 
 @app.route('/admin/department/<int:dept_id>/delete', methods=['POST'])
@@ -831,10 +849,17 @@ def delete_department(dept_id):
     dept_to_delete = db.session.get(Department, dept_id)
     if dept_to_delete:
         dept_name = dept_to_delete.name
+        # Check for associated services first
+        if dept_to_delete.services:
+             flash(f'Cannot delete department "{dept_name}" because it has existing services. Please delete or re-assign services first.', 'danger')
+             app.logger.warning(f"Admin {current_user.email} failed to delete department '{dept_name}' due to existing services.")
+             return redirect(url_for('manage_departments'))
+        # Check for associated tickets (though services should catch this first)
         if dept_to_delete.tickets:
             flash(f'Cannot delete department "{dept_name}" because it has existing tickets.', 'danger')
             app.logger.warning(f"Admin {current_user.email} failed to delete department '{dept_name}' due to existing tickets.")
             return redirect(url_for('manage_departments'))
+
         db.session.delete(dept_to_delete)
         db.session.commit()
         app.logger.info(f"Admin {current_user.email} deleted department: {dept_name}")
@@ -844,11 +869,113 @@ def delete_department(dept_id):
         app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent department ID: {dept_id}")
     return redirect(url_for('manage_departments'))
 
+@app.route('/admin/services')
+@login_required
+@admin_required
+def manage_services():
+    services = Service.query.join(Department, Service.department_id == Department.id) \
+                            .options(joinedload(Service.department)) \
+                            .order_by(Department.name, Service.name).all()
+    return render_template('admin/manage_services.html', services=services, title='Manage Services')
+
+@app.route('/admin/service/add', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def add_service():
+    form = ServiceForm()
+    form.department_id.choices = [(0, '-- Select Department --')] + [(d.id, d.name) for d in Department.query.order_by('name')]
+    
+    if form.validate_on_submit():
+        if form.department_id.data == 0:
+             flash('Please select a valid department.', 'danger')
+             return render_template('admin/add_edit_service.html', form=form, title='Add Service')
+        
+        existing_service = Service.query.filter_by(name=form.name.data, department_id=form.department_id.data).first()
+        if existing_service:
+            flash(f'The service "{form.name.data}" already exists in this department.', 'danger')
+            return render_template('admin/add_edit_service.html', form=form, title='Add Service')
+
+        new_service = Service(name=form.name.data, department_id=form.department_id.data)
+        db.session.add(new_service)
+        db.session.commit()
+        app.logger.info(f"Admin {current_user.email} added new service: '{new_service.name}' to department ID {new_service.department_id}")
+        flash(f'Service "{new_service.name}" has been created.', 'success')
+        return redirect(url_for('manage_services'))
+    
+    return render_template('admin/add_edit_service.html', form=form, title='Add Service')
+
+@app.route('/admin/service/<int:service_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_service(service_id):
+    service = db.session.get(Service, service_id)
+    if not service:
+        flash('Service not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to edit non-existent service ID: {service_id}")
+        return redirect(url_for('manage_services'))
+
+    form = ServiceForm(obj=service)
+    form.department_id.choices = [(d.id, d.name) for d in Department.query.order_by('name')]
+
+    if form.validate_on_submit():
+        if form.department_id.data == 0:
+             flash('Please select a valid department.', 'danger')
+             return render_template('admin/add_edit_service.html', form=form, title='Edit Service', service=service)
+
+        if service.name != form.name.data or service.department_id != form.department_id.data:
+            existing_service = Service.query.filter(
+                Service.name == form.name.data,
+                Service.department_id == form.department_id.data,
+                Service.id != service_id
+            ).first()
+            if existing_service:
+                flash(f'The service "{form.name.data}" already exists in this department.', 'danger')
+                return render_template('admin/add_edit_service.html', form=form, title='Edit Service', service=service)
+
+        service.name = form.name.data
+        service.department_id = form.department_id.data
+        db.session.commit()
+        app.logger.info(f"Admin {current_user.email} updated service ID {service_id} to name '{service.name}'")
+        flash(f'Service "{service.name}" has been updated.', 'success')
+        return redirect(url_for('manage_services'))
+
+    if request.method == 'GET':
+        form.name.data = service.name
+        form.department_id.data = service.department_id
+
+    return render_template('admin/add_edit_service.html', form=form, title='Edit Service', service=service)
+
+@app.route('/admin/service/<int:service_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_service(service_id):
+    service = db.session.get(Service, service_id)
+    if service:
+        service_name = service.name
+        if service.tickets:
+            flash(f'Cannot delete service "{service_name}" because it has existing tickets.', 'danger')
+            app.logger.warning(f"Admin {current_user.email} failed to delete service '{service_name}' due to existing tickets.")
+            return redirect(url_for('manage_services'))
+        
+        CannedResponse.query.filter_by(service_id=service_id).delete()
+        
+        db.session.delete(service)
+        db.session.commit()
+        app.logger.info(f"Admin {current_user.email} deleted service: {service_name}")
+        flash(f'Service "{service_name}" and its related canned responses have been deleted.', 'success')
+    else:
+        flash('Service not found.', 'danger')
+        app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent service ID: {service_id}")
+    return redirect(url_for('manage_services'))
+
+
 @app.route('/admin/canned-responses')
 @login_required
 @admin_required
 def manage_canned_responses():
-    responses = CannedResponse.query.options(joinedload(CannedResponse.department), joinedload(CannedResponse.service)).order_by(Department.name, CannedResponse.title).all()
+    responses = CannedResponse.query.join(Department, CannedResponse.department_id == Department.id) \
+                                    .options(joinedload(CannedResponse.department), joinedload(CannedResponse.service)) \
+                                    .order_by(Department.name, CannedResponse.title).all()
     return render_template('admin/canned_responses.html', responses=responses, title='Manage Canned Responses')
 
 @app.route('/admin/canned-response/add', methods=['GET', 'POST'])
@@ -886,7 +1013,6 @@ def edit_canned_response(response_id):
         app.logger.warning(f"Admin {current_user.email} attempted to edit non-existent canned response ID: {response_id}")
         return redirect(url_for('manage_canned_responses'))
     
-    original_title = response.title
     form = CannedResponseForm(obj=response)
     form.department_id.choices = [(d.id, d.name) for d in Department.query.order_by('name')]
     
@@ -1057,7 +1183,7 @@ def create_ticket_form(service_id):
         saved_filenames = []
         for field in form:
             if field.type == 'FileField' and hasattr(field, 'data') and field.data:
-                try: # --- SIMULA NG PAGBABAGO: Error Handling sa File Upload ---
+                try: 
                     file = field.data
                     filename = secure_filename(f"{field.name}_{file.filename}")
                     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
@@ -1066,7 +1192,6 @@ def create_ticket_form(service_id):
                     app.logger.error(f"Error saving attachment during ticket creation for service {service_id}: {e}\n{traceback.format_exc()}")
                     flash(f'An error occurred while uploading file for {field.label.text}. Please try again.', 'danger')
                     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
-                 # --- TAPOS NG PAGBABAGO ---
                 
         current_year = datetime.now(timezone.utc).year
         dept_code_map = {"ICT": "ICT", "Personnel": "PERS", "Legal Services": "LEGAL", "Office of the SDS": "SDS", "Accounting Unit": "ACCT", "Supply Office": "SUP"}
@@ -1102,10 +1227,8 @@ def create_ticket_form(service_id):
         if current_user.is_authenticated:
             return redirect(url_for('my_tickets'))
         else:
-            # Para sa mga hindi naka-login (kung papayagan mo), pwedeng thank you page
-            return redirect(url_for('select_department')) # O kaya sa home/login
+            return redirect(url_for('select_department')) 
 
-    # Kung GET request o nag-fail ang validation, i-render ang form
     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -1161,7 +1284,6 @@ def reset_request():
             send_reset_email(user)
             app.logger.info(f"Password reset requested for user: {form.email.data}")
         else:
-            # Huwag sabihin kung existing ang email for security
             app.logger.warning(f"Password reset requested for non-existent email: {form.email.data}")
         flash('An email has been sent with instructions to reset your password (if the email exists in our system).', 'info')
         return redirect(url_for('login'))
@@ -1185,25 +1307,17 @@ def reset_token(token):
         return redirect(url_for('login'))
     return render_template('reset_token.html', title='Reset Password', form=form)
 
-# --- SIMULA NG PAGBABAGO: General Error Handler ---
 @app.errorhandler(Exception)
 def handle_exception(e):
-    # Pass through HTTP errors
     if isinstance(e, HTTPException):
+        if e.code == 404:
+             app.logger.warning(f"404 Not Found: {request.url}")
+             return render_template("404.html"), 404 
         return e
-    # Log non-HTTP exceptions
+    
     app.logger.error(f"An unexpected error occurred: {e}\n{traceback.format_exc()}")
-    # Maaari kang mag-render ng custom 500 error page dito
-    return render_template("500.html"), 500 # Siguraduhing may templates/500.html ka
-# --- TAPOS NG PAGBABAGO ---
-
+    return render_template("500.html"), 500 
 
 if __name__ == '__main__':
-    # --- SIMULA NG PAGBABAGO: App Run Config ---
-    # Mas maganda kung hindi 'debug=True' sa production
-    # Ang logging ay iha-handle na ng setup sa taas
-    app.run(host='0.0.0.0', port=5000) # Listen on all interfaces
-    # --- TAPOS NG PAGBABAGO ---
-
-    
+    app.run(host='0.0.0.0', port=5000, debug=os.environ.get('FLASK_DEBUG', 'False').lower() == 'true')
 
