@@ -107,3 +107,28 @@ main {
     transform: translateY(-50%);
 }
 
+/* ============================
+   Pagination Fix (Idinagdag Dito)
+   ============================ */
+
+/* Target the active page link specifically */
+.page-item.active .page-link {
+    color: #fff !important; /* Set font color to white */
+    /* Optional: Add other styles if needed, but color is the main fix */
+    /* background-color: #0d6efd; /* Bootstrap's default blue, ensure this matches your theme */
+    /* border-color: #0d6efd; */
+}
+
+/* Optional: Style for disabled links (e.g., Previous/Next when at ends) */
+.page-item.disabled .page-link {
+    color: #6c757d; /* Bootstrap default grey */
+    background-color: #e9ecef; /* Lighter grey background */
+    border-color: #dee2e6;
+}
+
+/* Optional: Style for regular page links on hover */
+.page-link:hover {
+    color: #0a58ca; /* Darker blue on hover */
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}

@@ -17,6 +17,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 import traceback # Para sa mas detailed error logging
 from werkzeug.exceptions import HTTPException 
+from flask import jsonify 
+from datetime import timezone
 
 load_dotenv()
 
@@ -228,6 +230,7 @@ TCSD e-Services Team
 def seed_db():
     """Populates the database with initial data and canned responses."""
     
+    print("Clearing old canned responses...")
     db.session.query(CannedResponse).delete()
     db.session.commit()
     print("Old canned responses cleared.")
@@ -265,32 +268,84 @@ def seed_db():
     print("Authorized emails seeded.")
 
     print("Seeding Canned Responses...")
+    
+    # Ito na ang KUMPLETONG listahan mo, ikakabit lahat sa Department
+    # LAHAT NG ITO AY "GENERAL" (service_id=None)
     CANNED_RESPONSES_BY_DEPT = {
-        "ICT": [ ("Transaction Completed", "Your transaction was already processed and completed. We will now close this ticket. Thank you."), ("Files Posted Online", "The files you uploaded have already been posted on the Division Website. Thank you."), ],
-        "Legal Services": [ ("No Pending Case Approved", "This serves to formally notify you that your request for a No Pending Case Certification has been duly approved. You may collect the document in person or, alternatively, coordinate with the Administrative Officer of your school to facilitate its release from the Division Records Office. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.") ],
+        "ICT": [
+            ("Transaction Completed", "Your transaction was already processed and completed. We will now close this ticket. Thank you."),
+            ("Files Posted Online", "The files you uploaded have already been posted on the Division Website. Thank you."),
+            ("Temp Password - Google", "Use your temporary password to sign in to your DepEd Google account at Gmail.com"),
+            ("Temp Password - Microsoft", "Use your temporary password to sign in to your DepEd Microsoft account on Office.com"),
+            ("Temp Password - DPDS", "Use your temporary password to sign in to your official school email address at partnershipsdatabase.deped.gov.ph"),
+            ("Sent to Central Office", "Your request has been sent to the DepEd Central Office. Please wait for further instructions. Thank you."),
+            ("2FA Disabled", "The two-factor authentication has been successfully disabled. You can now access the provided email account using the same password that was previously set."),
+            ("Missing Email - 2FA", "Please provide the email address for which you wish to remove two-factor authentication. Thank you."),
+            ("Missing Email - Reset", "Kindly provide the DepEd email address you wish to have reset by the ICTU. Thank you."),
+            ("Google Account Required", "A DepEd Google account is required to create a Microsoft account. Kindly provide the DepEd Google account. Thank you."),
+            ("Invalid Attachment", "Please use valid attachment as proof for the newly hired teacher. Thank you."),
+            ("Pending Activation", "The activation of the DepEd email account is pending and that the recipient should wait for the Central Office to handle the activation process. Thank you"),
+            ("Storage Warning", "Please ensure that your Google Drive storage does not exceed the maximum allocation of 100GB per person. Exceeding this limit will result in the suspension of Google Apps usage, so please free up space accordingly."),
+            ("Account Disabled", "Your account has been disabled by admin. To reactivate: 1. Visit Division Office (ICTU) for assistance or call Esmeraldo Lingat: (045) 982 4514. Thank you."),
+            ("Account Already Active", "The DepEd email account you provided is already activated. We cannot make any changes to this account. Thank you."),
+            ("Canva Account Info", "If you want to use Canva, you need to link your Microsoft account to it. However, if your Microsoft account is not working, you may have used the wrong account, or if the account is correct, you might have forgotten the password. To resolve this issue, please ask your school ICT Coordinator to request a password reset from the Division ICT Unit (ICTU). Thank you.")
+        ],
+        "Legal Services": [
+            ("No Pending Case Approved", "This serves to formally notify you that your request for a No Pending Case Certification has been duly approved. You may collect the document in person or, alternatively, coordinate with the Administrative Officer of your school to facilitate its release from the Division Records Office. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.")
+        ],
+        "Office of the SDS": [
+            ("Locator Slip Approved", "Your Locator Slip has been duly approved. You may access the document by signing in to your school account through TCSD e-Services."),
+            ("Authority to Travel Approved", "Your request for Authority to Travel has been duly approved. You may retrieve the document in person or coordinate with the Administrative Officer at your school to facilitate its release from the Division Records Office. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."),
+            ("OIC Request Forwarded", "Your request for the Designation of an Officer-in-Charge at your School has been forwarded to the Personnel Unit for processing. Thank you."),
+            ("ADM Request Forwarded", "Your request for the Alternative Delivery Mode at your School has been forwarded to the Personnel Unit for processing. Thank you."),
+            ("Substitute Teacher Fowarded", "Your request for a Substitute Teacher at your school has been forwarded to the Personnel Unit for processing. Thank you.")
+        ],
+        "Accounting Unit": [
+            ("Provident Fund Processing", "Your DepEd TCSD Provident Fund application is currently being processed. The application will proceed upon the availability of funds."),
+            ("Provident Fund SOA Ready", "Your DepEd TCSD Provident Fund Statement of Account has been duly prepared and signed. You may retrieve it in person or coordinate with your school's Administrative Officer for its release Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."),
+            ("Provident Fund Clearance Ready", "Your request for a Provident Loan Accountability Clearance has been duly prepared and signed. You may retrieve it in person or coordinate with your school's Administrative Officer for its release. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.")
+        ],
+        "Supply Office": [
+            ("ICS Approved", "Your submission of the Inventory Custodian Slip (ICS) has been reviewed, approved, and duly signed. Kindly refer to the soft copy provided in TCSD e-Services by signing in to your school account. This shall serve as your official copy for school inventory records.")
+        ]
     }
+
     for dept_name, responses_list in CANNED_RESPONSES_BY_DEPT.items():
         dept = Department.query.filter_by(name=dept_name).first()
         if dept:
             for title, body in responses_list:
-                db.session.add(CannedResponse(title=title, body=body, department_id=dept.id, service_id=None))
+                # Titingnan natin kung existing na ba bago idagdag
+                if not CannedResponse.query.filter_by(title=title, department_id=dept.id).first():
+                    # Idadagdag natin sila na may service_id=None (general)
+                    db.session.add(CannedResponse(title=title, body=body, department_id=dept.id, service_id=None))
     db.session.commit()
     print("Department-level canned responses seeded.")
 
+    # Ito yung para sa Personnel na specific per service
     CANNED_RESPONSES_BY_SERVICE = {
         "Application for Leave of Absence": [ ("Leave Approved (with Soft Copy)", "Your application for leave of absence has been duly approved. You may either retrieve the document in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division. Additionally, a soft copy is provided for your convenience. You may access it by signing in to your school account through TCSD e-Services."), ("Form 6 - Needs Signature", "Kindly request the school head to affix their signature to your Form 6 for official validation.") ],
         "Certificate of Employment": [ ("COE Approved (with Soft Copy)", "Your requested Certificate of Employment has been duly prepared and signed. You may either retrieve it in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division. Additionally, a soft copy has been provided for your convenience. You may access it by signing in to your school account through TCSD e-Services.") ],
         "Service Record": [ ("SR Approved (Hard Copy only)", "Your requested Service Record has been duly prepared and signed. You may either retrieve it in person or coordinate with the Administrative Officer at your school to facilitate its release from the Records Office of the Division."), ("SR Approved (Soft Copy only)", "Your requested Service Record has been duly prepared and signed. You may access the soft copy by signing in to your school account through TCSD e-Services.") ],
         "GSIS BP Number": [ ("GSIS BP Created", "Your BP number has been duly created. Please check."), ("GSIS BP Updated", "Your BP number has been duly updated. Please check.") ]
     }
+    
     for service_name, responses_list in CANNED_RESPONSES_BY_SERVICE.items():
         service = Service.query.filter_by(name=service_name).first()
         if service:
             for title, body in responses_list:
-                db.session.add(CannedResponse(title=title, body=body, department_id=service.department_id, service_id=service.id))
+                # Titingnan natin kung existing na ba bago idagdag
+                if not CannedResponse.query.filter_by(title=title, service_id=service.id).first():
+                    # Idadagdag natin sila na nakakabit sa department at service
+                    db.session.add(CannedResponse(
+                        title=title, 
+                        body=body, 
+                        department_id=service.department_id, 
+                        service_id=service.id
+                    ))
     db.session.commit()
     print("Service-level canned responses seeded.")
     print("Database seeding complete!")
+
 
 @app.cli.command("create-admin")
 def create_admin():
@@ -315,6 +370,10 @@ def home():
     else:
         return redirect(url_for('my_tickets'))
 
+
+# =================================================================
+# === SIMULA NG PAGBABAGO: Inayos na staff_dashboard function ======
+# =================================================================
 @app.route('/staff-dashboard')
 @login_required
 def staff_dashboard():
@@ -327,6 +386,7 @@ def staff_dashboard():
     page_resolved = request.args.get('page_resolved', 1, type=int)
     search_query = request.args.get('search', '').strip()
     
+    # --- Year/Quarter Filtering Logic (Walang binago dito) ---
     available_years_query = db.session.query(extract('year', Ticket.date_posted)).distinct().order_by(extract('year', Ticket.date_posted).desc())
     available_years = [y[0] for y in available_years_query.all()]
     current_year = datetime.utcnow().year
@@ -335,20 +395,39 @@ def staff_dashboard():
     elif selected_year not in available_years: selected_year = available_years[0]
     
     selected_quarter = request.args.get('quarter', 0, type=int)
+    quarters = {
+        1: (datetime(selected_year, 1, 1, tzinfo=timezone.utc), datetime(selected_year, 3, 31, 23, 59, 59, tzinfo=timezone.utc)),
+        2: (datetime(selected_year, 4, 1, tzinfo=timezone.utc), datetime(selected_year, 6, 30, 23, 59, 59, tzinfo=timezone.utc)),
+        3: (datetime(selected_year, 7, 1, tzinfo=timezone.utc), datetime(selected_year, 9, 30, 23, 59, 59, tzinfo=timezone.utc)),
+        4: (datetime(selected_year, 10, 1, tzinfo=timezone.utc), datetime(selected_year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)),
+    }
     
-    base_query = Ticket.query.options(db.joinedload(Ticket.school), db.joinedload(Ticket.service_type))
-
+    # --- Base Query for Tickets & Staff Filtering (Walang binago) ---
+    ticket_base_query = Ticket.query.options(db.joinedload(Ticket.school), db.joinedload(Ticket.service_type))
+    managed_service_ids = None # Initialize para malaman kung Staff
     if current_user.role == 'Staff':
         managed_service_ids = [service.id for service in current_user.managed_services]
         if not managed_service_ids:
             flash("You are not assigned to any services. Please contact an administrator.", "warning")
             app.logger.warning(f"Staff user {current_user.email} has no assigned services.")
-            return render_template('staff_dashboard.html', active_tickets=None, resolved_tickets=None, dashboard_summary={}, title="My Managed Tickets", available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter, search_query=search_query)
-        base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
+            # Important: Still need to return the template structure even if empty
+            empty_paginate = db.paginate(db.select(Ticket).where(db.false()), page=1, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+            return render_template('staff_dashboard.html', 
+                                   active_tickets=empty_paginate, 
+                                   resolved_tickets=empty_paginate, 
+                                   dashboard_summary={}, 
+                                   school_summary={}, # Ipasa rin ang empty school summary
+                                   title="My Managed Tickets", 
+                                   available_years=available_years, 
+                                   selected_year=selected_year, 
+                                   selected_quarter=selected_quarter, 
+                                   search_query=search_query)
+        ticket_base_query = ticket_base_query.filter(Ticket.service_id.in_(managed_service_ids))
 
+    # --- Apply Search or Date Filters to Ticket Query (Walang binago) ---
     if search_query:
         search_term = f"%{search_query}%"
-        base_query = base_query.join(School, Ticket.school_id == School.id, isouter=True).filter(
+        ticket_base_query = ticket_base_query.join(School, Ticket.school_id == School.id, isouter=True).filter(
             or_(
                 Ticket.ticket_number.ilike(search_term),
                 Ticket.requester_name.ilike(search_term),
@@ -356,77 +435,148 @@ def staff_dashboard():
             )
         )
     else:
-        base_query = base_query.filter(extract('year', Ticket.date_posted) == selected_year)
-        quarters = {
-            1: (datetime(selected_year, 1, 1), datetime(selected_year, 3, 31, 23, 59, 59)),
-            2: (datetime(selected_year, 4, 1), datetime(selected_year, 6, 30, 23, 59, 59)),
-            3: (datetime(selected_year, 7, 1), datetime(selected_year, 9, 30, 23, 59, 59)),
-            4: (datetime(selected_year, 10, 1), datetime(selected_year, 12, 31, 23, 59, 59)),
-        }
+        # Apply year filter always when not searching
+        ticket_base_query = ticket_base_query.filter(extract('year', Ticket.date_posted) == selected_year)
+        # Apply quarter filter if selected
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
-            base_query = base_query.filter(Ticket.date_posted.between(start_date, end_date))
+            # Ensure comparison is timezone-aware if date_posted is
+            ticket_base_query = ticket_base_query.filter(Ticket.date_posted.between(start_date, end_date))
 
-    status_order = case(
-        (Ticket.status == 'Open', 1),
-        (Ticket.status == 'In Progress', 2),
-        else_=3
-    )
-
-    active_tickets = base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(status_order, Ticket.date_posted.desc()).paginate(page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
-    resolved_tickets = base_query.filter(Ticket.status == 'Resolved').order_by(Ticket.date_posted.desc()).paginate(page=page_resolved, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+    # --- Paginate Active/Resolved Tickets (Walang binago) ---
+    status_order = case((Ticket.status == 'Open', 1), (Ticket.status == 'In Progress', 2), else_=3)
+    active_tickets = db.paginate(ticket_base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(status_order, Ticket.date_posted.desc()), 
+                                 page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
+    resolved_tickets = db.paginate(ticket_base_query.filter(Ticket.status == 'Resolved').order_by(Ticket.date_posted.desc()), 
+                                   page=page_resolved, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
     
+    # --- Generate Department Summary (Logic mostly the same, used for Dept Tab) ---
     dashboard_summary = {}
-    if not search_query:
-        summary_query = db.session.query(
+    if not search_query: # Summary only shown when not searching
+        dept_summary_query = db.session.query(
             Department.name.label('dept_name'),
             Service.name.label('service_name'),
+            Service.id.label('service_id'), # Added service_id
             func.count(Ticket.id).label('total'),
             func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
-        ).join(Service, Ticket.service_id == Service.id).join(Department, Service.department_id == Department.id)
+        ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(Department, Service.department_id == Department.id)
 
-        summary_query = summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
-        
+        # Apply Year/Quarter filters
+        dept_summary_query = dept_summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
-            summary_query = summary_query.filter(Ticket.date_posted.between(start_date, end_date))
+            dept_summary_query = dept_summary_query.filter(Ticket.date_posted.between(start_date, end_date))
 
-        if current_user.role == 'Staff':
-            managed_service_ids_for_summary = [service.id for service in current_user.managed_services]
-            summary_query = summary_query.filter(Service.id.in_(managed_service_ids_for_summary))
+        # Apply Staff filter if applicable
+        if managed_service_ids is not None:
+             dept_summary_query = dept_summary_query.filter(Service.id.in_(managed_service_ids))
         
-        summary_data = summary_query.group_by(Department.name, Service.name).all()
+        dept_summary_data = dept_summary_query.group_by(Department.name, Service.name, Service.id).all()
         
+        # Determine relevant departments for the user
         if current_user.role == 'Admin':
             all_departments = Department.query.options(db.joinedload(Department.services)).order_by(Department.name).all()
-        else:
-            all_departments = Department.query.join(Service).join(Service.managers).filter(User.id == current_user.id).options(db.joinedload(Department.services)).order_by(Department.name).distinct().all()
+        else: # Staff
+            all_departments = Department.query.join(Service).filter(Service.id.in_(managed_service_ids)).options(db.joinedload(Department.services.and_(Service.id.in_(managed_service_ids)))).order_by(Department.name).distinct().all()
 
-        color_palette = ['#FE9321', '#6FE3CC', '#185D7A', '#C8DB2A', '#EF4687']
+        color_palette = ['#FE9321', '#6FE3CC', '#185D7A', '#C8DB2A', '#EF4687', '#5BC0DE', '#F0AD4E', '#D9534F'] # Added more colors
 
         for dept in all_departments:
             dept_services_data = []
             department_total_tickets = 0
-            services_in_dept = sorted(dept.services, key=lambda s: s.name)
+            # Ensure we only iterate services relevant to staff
+            services_in_dept = sorted([s for s in dept.services if managed_service_ids is None or s.id in managed_service_ids], key=lambda s: s.name)
+            
             for i, service in enumerate(services_in_dept):
-                if current_user.role == 'Admin' or service in current_user.managed_services:
-                    found = False
-                    for row in summary_data:
-                        if row.dept_name == dept.name and row.service_name == service.name:
-                            active = row.total - row.resolved_count
-                            dept_services_data.append({'name': service.name, 'active': active, 'resolved': row.resolved_count, 'total': row.total, 'color': color_palette[i % len(color_palette)]})
-                            department_total_tickets += row.total
-                            found = True
-                            break
-                    if not found:
-                        dept_services_data.append({'name': service.name, 'active': 0, 'resolved': 0, 'total': 0, 'color': color_palette[i % len(color_palette)]})
-            if dept_services_data:
+                found_data = next((row for row in dept_summary_data if row.dept_name == dept.name and row.service_id == service.id), None)
+                
+                if found_data:
+                    resolved = found_data.resolved_count
+                    total = found_data.total
+                    active = total - resolved
+                    dept_services_data.append({
+                        'name': service.name, 
+                        'active': active, 
+                        'resolved': resolved, 
+                        'total': total, 
+                        'resolved_percent': int(resolved / total * 100) if total > 0 else 0,
+                        'color': color_palette[i % len(color_palette)]
+                    })
+                    department_total_tickets += total
+                else: # Service exists but has 0 tickets in the period
+                     dept_services_data.append({
+                        'name': service.name, 
+                        'active': 0, 
+                        'resolved': 0, 
+                        'total': 0, 
+                        'resolved_percent': 0,
+                        'color': color_palette[i % len(color_palette)]
+                    })
+
+            if dept_services_data: # Only add department if it has relevant services
                 dashboard_summary[dept.name] = {
                     'services': dept_services_data,
-                    'department_total': department_total_tickets
+                    'department_total': department_total_tickets,
+                    'service_count': len(dept_services_data) # Add service count here
                 }
-    
-    return render_template('staff_dashboard.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, dashboard_summary=dashboard_summary, title="System Dashboard", available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter, search_query=search_query)
+
+    # --- BAGONG LOGIC: Generate School Summary (For School Tab) ---
+    school_summary = {}
+    if not search_query: # Summary only shown when not searching
+        school_summary_query = db.session.query(
+            School.name.label('school_name'),
+            Service.name.label('service_name'),
+            Service.id.label('service_id'), # Added service_id
+            func.count(Ticket.id).label('total'),
+            func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
+        ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(School, Ticket.school_id == School.id) # Ensure School join is correct
+
+        # Apply Year/Quarter filters
+        school_summary_query = school_summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
+        if selected_quarter in quarters:
+            start_date, end_date = quarters[selected_quarter]
+            school_summary_query = school_summary_query.filter(Ticket.date_posted.between(start_date, end_date))
+
+        # Apply Staff filter if applicable
+        if managed_service_ids is not None:
+             school_summary_query = school_summary_query.filter(Service.id.in_(managed_service_ids))
+
+        # Group by School and Service
+        school_summary_data_flat = school_summary_query.group_by(School.name, Service.name, Service.id).order_by(School.name, Service.name).all()
+
+        # Transform flat data into nested dictionary
+        for row in school_summary_data_flat:
+            school_name = row.school_name
+            if school_name not in school_summary:
+                school_summary[school_name] = {'total_school_tickets': 0, 'services': []}
+            
+            resolved = row.resolved_count
+            total = row.total
+            active = total - resolved
+            
+            school_summary[school_name]['services'].append({
+                'name': row.service_name,
+                'active': active,
+                'resolved': resolved,
+                'total': total
+            })
+            school_summary[school_name]['total_school_tickets'] += total
+            
+    # --- Ipasa lahat sa template ---
+    return render_template('staff_dashboard.html', 
+                           active_tickets=active_tickets, 
+                           resolved_tickets=resolved_tickets, 
+                           dashboard_summary=dashboard_summary, 
+                           school_summary=school_summary, # Ipasa ang bagong data
+                           title="System Dashboard", 
+                           available_years=available_years, 
+                           selected_year=selected_year, 
+                           selected_quarter=selected_quarter, 
+                           search_query=search_query)
+# =================================================================
+# === TAPOS NG PAGBABAGO: Ang natitirang code ay pareho na ========
+# =================================================================
+
 
 @app.route('/export-tickets')
 @login_required
@@ -522,6 +672,9 @@ def my_tickets():
     
     return render_template('my_tickets.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, title='My Tickets', search_query=search_query)
 
+# =================================================================
+# === SIMULA NG PAGBABAGO: Ito ang inayos na ticket_detail route ===
+# =================================================================
 @app.route('/ticket/<int:ticket_id>', methods=['GET', 'POST'])
 @login_required
 def ticket_detail(ticket_id):
@@ -546,8 +699,19 @@ def ticket_detail(ticket_id):
     personal_canned_responses = []
     
     if is_staff_or_admin:
-        system_canned_responses = CannedResponse.query.filter( or_( CannedResponse.service_id == ticket.service_id, (CannedResponse.department_id == ticket.department_id) & (CannedResponse.service_id == None) ) ).order_by(CannedResponse.body).all()
-        personal_canned_responses = PersonalCannedResponse.query.filter_by(user_id=current_user.id).order_by(PersonalCannedResponse.body).all()
+        # --- ITO ANG TAMANG QUERY ---
+        # Kukunin nito ang (A) lahat ng CR na para sa specific service,
+        # at (B) lahat ng CR na "General" (service_id=None) para sa buong department.
+        system_canned_responses = CannedResponse.query.filter(
+            CannedResponse.department_id == ticket.department_id,
+            or_(
+                CannedResponse.service_id == ticket.service_id,
+                CannedResponse.service_id == None
+            )
+        ).order_by(CannedResponse.service_id.desc(), CannedResponse.title).all() 
+        # Ang .order_by(service_id.desc()) ay uunahin ang service-specific bago ang general
+        
+        personal_canned_responses = PersonalCannedResponse.query.filter_by(user_id=current_user.id).order_by(PersonalCannedResponse.title).all()
 
     if form.validate_on_submit():
         if ticket.status == 'Resolved' and not is_staff_or_admin:
@@ -592,8 +756,10 @@ def ticket_detail(ticket_id):
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
     
     return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, system_canned_responses=system_canned_responses, personal_canned_responses=personal_canned_responses)
+# =================================================================
+# === TAPOS NG PAGBABAGO: Ang natitirang code ay pareho na ===
+# =================================================================
 
-# --- BAGONG ROUTE: DELETE TICKET (PARA SA ADMIN LANG) ---
 @app.route('/ticket/<int:ticket_id>/delete', methods=['POST'])
 @login_required
 @admin_required
@@ -614,7 +780,6 @@ def delete_ticket(ticket_id):
         flash('Ticket not found.', 'danger')
         app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent ticket ID: {ticket_id}")
         return redirect(url_for('staff_dashboard'))
-# --- TAPOS NG BAGONG ROUTE ---
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -851,9 +1016,9 @@ def delete_department(dept_id):
         dept_name = dept_to_delete.name
         # Check for associated services first
         if dept_to_delete.services:
-             flash(f'Cannot delete department "{dept_name}" because it has existing services. Please delete or re-assign services first.', 'danger')
-             app.logger.warning(f"Admin {current_user.email} failed to delete department '{dept_name}' due to existing services.")
-             return redirect(url_for('manage_departments'))
+            flash(f'Cannot delete department "{dept_name}" because it has existing services. Please delete or re-assign services first.', 'danger')
+            app.logger.warning(f"Admin {current_user.email} failed to delete department '{dept_name}' due to existing services.")
+            return redirect(url_for('manage_departments'))
         # Check for associated tickets (though services should catch this first)
         if dept_to_delete.tickets:
             flash(f'Cannot delete department "{dept_name}" because it has existing tickets.', 'danger')
@@ -874,8 +1039,8 @@ def delete_department(dept_id):
 @admin_required
 def manage_services():
     services = Service.query.join(Department, Service.department_id == Department.id) \
-                            .options(joinedload(Service.department)) \
-                            .order_by(Department.name, Service.name).all()
+                           .options(joinedload(Service.department)) \
+                           .order_by(Department.name, Service.name).all()
     return render_template('admin/manage_services.html', services=services, title='Manage Services')
 
 @app.route('/admin/service/add', methods=['GET', 'POST'])
@@ -887,8 +1052,8 @@ def add_service():
     
     if form.validate_on_submit():
         if form.department_id.data == 0:
-             flash('Please select a valid department.', 'danger')
-             return render_template('admin/add_edit_service.html', form=form, title='Add Service')
+            flash('Please select a valid department.', 'danger')
+            return render_template('admin/add_edit_service.html', form=form, title='Add Service')
         
         existing_service = Service.query.filter_by(name=form.name.data, department_id=form.department_id.data).first()
         if existing_service:
@@ -919,8 +1084,8 @@ def edit_service(service_id):
 
     if form.validate_on_submit():
         if form.department_id.data == 0:
-             flash('Please select a valid department.', 'danger')
-             return render_template('admin/add_edit_service.html', form=form, title='Edit Service', service=service)
+            flash('Please select a valid department.', 'danger')
+            return render_template('admin/add_edit_service.html', form=form, title='Edit Service', service=service)
 
         if service.name != form.name.data or service.department_id != form.department_id.data:
             existing_service = Service.query.filter(
@@ -974,8 +1139,8 @@ def delete_service(service_id):
 @admin_required
 def manage_canned_responses():
     responses = CannedResponse.query.join(Department, CannedResponse.department_id == Department.id) \
-                                    .options(joinedload(CannedResponse.department), joinedload(CannedResponse.service)) \
-                                    .order_by(Department.name, CannedResponse.title).all()
+                                      .options(joinedload(CannedResponse.department), joinedload(CannedResponse.service)) \
+                                      .order_by(Department.name, CannedResponse.title).all()
     return render_template('admin/canned_responses.html', responses=responses, title='Manage Canned Responses')
 
 @app.route('/admin/canned-response/add', methods=['GET', 'POST'])
@@ -1264,6 +1429,51 @@ def login():
             flash('Login Unsuccessful. Please check email and password', 'danger')
     return render_template('login.html', form=form, title='Login')
 
+
+@app.route('/check-new-tickets')
+@login_required
+def check_new_tickets():
+    """
+    Checks for tickets posted after a given timestamp.
+    Returns JSON: {'new_count': count, 'latest_timestamp': iso_timestamp_of_latest}
+    """
+    if current_user.role not in ['Admin', 'Staff']:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    since_iso = request.args.get('since', datetime.min.replace(tzinfo=timezone.utc).isoformat()) # Default with timezone
+    try:
+        # Use fromisoformat which handles timezone correctly ('Z' or '+00:00')
+        since_dt = datetime.fromisoformat(since_iso.replace('Z', '+00:00'))
+        # Ensure it's timezone-aware for comparison, default to UTC if naive
+        if since_dt.tzinfo is None:
+            since_dt = since_dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        since_dt = datetime.min.replace(tzinfo=timezone.utc) # Default with timezone
+
+    # Ensure date_posted is compared correctly (assuming date_posted is timezone-aware UTC in DB)
+    base_query = Ticket.query.filter(Ticket.date_posted > since_dt)
+
+    if current_user.role == 'Staff':
+        managed_service_ids = [service.id for service in current_user.managed_services]
+        if not managed_service_ids:
+            return jsonify({'new_count': 0, 'latest_timestamp': since_iso})
+        base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
+    
+    new_count = base_query.count()
+
+    latest_ticket = base_query.order_by(Ticket.date_posted.desc()).first()
+    # Ensure the returned timestamp is also timezone-aware (ISO format includes offset)
+    latest_timestamp_iso = latest_ticket.date_posted.isoformat() if latest_ticket else since_iso
+
+    return jsonify({
+        'new_count': new_count,
+        'latest_timestamp': latest_timestamp_iso 
+    })
+# =================================================================
+# === TAPOS NG ROUTE ==============================================
+# =================================================================
+
+
 @app.route('/logout')
 @login_required
 def logout():
@@ -1311,8 +1521,8 @@ def reset_token(token):
 def handle_exception(e):
     if isinstance(e, HTTPException):
         if e.code == 404:
-             app.logger.warning(f"404 Not Found: {request.url}")
-             return render_template("404.html"), 404 
+            app.logger.warning(f"404 Not Found: {request.url}")
+            return render_template("404.html"), 404 
         return e
     
     app.logger.error(f"An unexpected error occurred: {e}\n{traceback.format_exc()}")
@@ -1320,4 +1530,3 @@ def handle_exception(e):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=os.environ.get('FLASK_DEBUG', 'False').lower() == 'true')
-
