@@ -44,6 +44,27 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 app.secret_key = os.getenv('SECRET_KEY')
 
+
+# --- App Initialization and Config ---
+app = Flask(__name__)
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+# --- SIMULA NG BAGONG CONFIGURATIONS ---
+# Maximum file size per upload (in Megabytes)
+app.config['MAX_FILE_SIZE_MB'] = 25 
+# Calculate bytes (1MB = 1024 * 1024 bytes)
+MAX_FILE_SIZE_BYTES = app.config['MAX_FILE_SIZE_MB'] * 1024 * 1024 
+# Define allowed extensions here (or get from form validators if consistent)
+# Mas maganda kung consistent ito sa FileAllowed validators mo sa forms.py
+ALLOWED_EXTENSIONS = {'pdf'}
+# --- TAPOS NG BAGONG CONFIGURATIONS ---
+
+app.secret_key = os.getenv('SECRET_KEY')
+
+# ... (Database Configuration, etc. - walang binago dito) ...
+
+
+
 # --- Database Configuration ---
 MYSQL_USER = os.getenv('MYSQL_USER', 'root')
 MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', '')
@@ -672,9 +693,7 @@ def my_tickets():
     
     return render_template('my_tickets.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, title='My Tickets', search_query=search_query)
 
-# =================================================================
-# === SIMULA NG PAGBABAGO: Ito ang inayos na ticket_detail route ===
-# =================================================================
+
 @app.route('/ticket/<int:ticket_id>', methods=['GET', 'POST'])
 @login_required
 def ticket_detail(ticket_id):
@@ -695,13 +714,10 @@ def ticket_detail(ticket_id):
              return redirect(url_for('home'))
         form = ResponseForm()
 
+    # --- Canned Response Query (Walang binago dito, gamit ang inayos na version) ---
     system_canned_responses = []
     personal_canned_responses = []
-    
     if is_staff_or_admin:
-        # --- ITO ANG TAMANG QUERY ---
-        # Kukunin nito ang (A) lahat ng CR na para sa specific service,
-        # at (B) lahat ng CR na "General" (service_id=None) para sa buong department.
         system_canned_responses = CannedResponse.query.filter(
             CannedResponse.department_id == ticket.department_id,
             or_(
@@ -709,8 +725,6 @@ def ticket_detail(ticket_id):
                 CannedResponse.service_id == None
             )
         ).order_by(CannedResponse.service_id.desc(), CannedResponse.title).all() 
-        # Ang .order_by(service_id.desc()) ay uunahin ang service-specific bago ang general
-        
         personal_canned_responses = PersonalCannedResponse.query.filter_by(user_id=current_user.id).order_by(PersonalCannedResponse.title).all()
 
     if form.validate_on_submit():
@@ -718,47 +732,99 @@ def ticket_detail(ticket_id):
             flash('This ticket is already resolved and cannot receive new responses.', 'info')
             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
         
-        try:
-            if form.attachment.data:
-                file = form.attachment.data
-                timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-                filename = f"{timestamp}_{secure_filename(file.filename)}"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                db.session.add(Attachment(filename=filename, ticket_id=ticket.id))
-        except Exception as e:
-             app.logger.error(f"Error saving attachment for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
-             flash('An error occurred while uploading the attachment. Please try again.', 'danger')
-             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
-            
-        response = TicketResponse(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
-        db.session.add(response)
+        # --- SIMULA NG FILE VALIDATION & HANDLING ---
+        file_to_save_object = None   # To hold the FileStorage object
+        filename_to_save_in_db = None # To hold the final filename for DB and saving
         
-        if hasattr(form, 'status'):
-            old_status = ticket.status
-            ticket.status = form.status.data
-            app.logger.info(f"Ticket {ticket_id} status changed from '{old_status}' to '{ticket.status}' by user {current_user.email}")
-            if ticket.status == 'Resolved':
-                send_resolution_email(ticket, form.body.data)
-                flash('Your response has been added and a resolution email has been sent.', 'success')
-            else:
-                flash('Your response has been added and the ticket status has been updated.', 'success')
-        else:
-            flash('Your response has been added successfully!', 'success')
-            if not is_staff_or_admin:
-                send_staff_notification_email(ticket, response)
+        if form.attachment.data:
+            file = form.attachment.data
+            filename = secure_filename(file.filename)
+            
+            # 1. Size Check
+            try:
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                file.seek(0)
+
+                if file_size == 0:
+                    flash(f"Attachment '{filename}' appears to be empty. Please upload a valid file.", 'warning')
+                    # Don't redirect yet, maybe they just want to add text
                 
-        db.session.commit()
-        return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+                elif file_size > MAX_FILE_SIZE_BYTES:
+                    flash(f"Attachment '{filename}' exceeds the {app.config['MAX_FILE_SIZE_MB']}MB size limit. Response not submitted.", 'danger')
+                    return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect back
+
+            except Exception as e:
+                app.logger.error(f"Error checking attachment size for ticket {ticket_id}: {e}")
+                flash(f"Could not check the size of attachment '{filename}'. Response not submitted.", 'danger')
+                return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect back
+
+            # 2. Type Check (only if file has size)
+            if file_size > 0 and filename and ('.' not in filename or \
+               filename.rsplit('.', 1)[1].lower() not in ALLOWED_EXTENSIONS):
+                 flash(f"Attachment file type for '{filename}' is not allowed. Allowed types are: {', '.join(sorted(ALLOWED_EXTENSIONS))}. Response not submitted.", 'danger')
+                 return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect back
+
+            # If checks passed and file has content, prepare for saving
+            if file_size > 0:
+                timestamp = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')
+                filename_to_save_in_db = f"{timestamp}_{filename}"
+                file_to_save_object = file # Keep the file object ready
+        # --- TAPOS NG FILE VALIDATION & HANDLING ---
+
+        # --- Proceed with saving response and file (if validated) ---
+        try:
+            # Save the file FIRST if it exists and was validated
+            if file_to_save_object and filename_to_save_in_db:
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename_to_save_in_db)
+                file_to_save_object.save(save_path)
+                app.logger.info(f"Successfully saved attachment: {filename_to_save_in_db} for ticket {ticket_id}")
+            
+            # Add response to DB
+            new_response = TicketResponse(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
+            db.session.add(new_response)
+            
+            # Add attachment record to DB if file was saved
+            if filename_to_save_in_db:
+                db.session.add(Attachment(filename=filename_to_save_in_db, ticket_id=ticket.id))
+            
+            # Update ticket status if applicable (staff/admin form)
+            if hasattr(form, 'status'):
+                old_status = ticket.status
+                new_status = form.status.data
+                if old_status != new_status:
+                    ticket.status = new_status
+                    app.logger.info(f"Ticket {ticket_id} status changed from '{old_status}' to '{new_status}' by user {current_user.email}")
+                    if new_status == 'Resolved':
+                        send_resolution_email(ticket, form.body.data)
+                        flash('Your response has been added and a resolution email has been sent.', 'success')
+                    else:
+                        flash('Your response has been added and the ticket status has been updated.', 'success')
+                else: # Status didn't change, just added response
+                    flash('Your response has been added successfully!', 'success')
+            else: # User added a response
+                flash('Your response has been added successfully!', 'success')
+                # Notify staff only if the user (not staff/admin) added the response
+                if not is_staff_or_admin: 
+                    send_staff_notification_email(ticket, new_response)
+                    
+            db.session.commit() # Commit all changes (response, attachment record, status)
+
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Error saving response/attachment for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+            flash('An error occurred while saving the response or attachment. Please try again.', 'danger')
+            # Optional: Attempt to delete saved file if DB fails
+        
+        return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect after successful POST or error handling
     
+    # --- GET Request logic (Walang binago) ---
     if request.method == 'GET' and hasattr(form, 'status'):
         form.status.data = ticket.status
         
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
     
     return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, system_canned_responses=system_canned_responses, personal_canned_responses=personal_canned_responses)
-# =================================================================
-# === TAPOS NG PAGBABAGO: Ang natitirang code ay pareho na ===
-# =================================================================
 
 @app.route('/ticket/<int:ticket_id>/delete', methods=['POST'])
 @login_required
@@ -1309,12 +1375,15 @@ def select_service(department_id):
         return redirect(url_for('select_department'))
     return render_template('select_service.html', department=department, services=department.services, title=f'Select a Service for {department.name}')
 
+
 @app.route('/create-ticket/form/<int:service_id>', methods=['GET', 'POST'])
 def create_ticket_form(service_id):
     service = db.session.get(Service, service_id)
     if not service:
         flash('Invalid service selected.', 'error')
         return redirect(url_for('select_department'))
+        
+    # --- Form Mapping (Walang binago dito) ---
     form_map = {
         'Issuances and Online Materials': IssuanceForm, 'Repair, Maintenance and Troubleshoot of IT Equipment': RepairForm,
         'DepEd Email Account': EmailAccountForm, 'DPDS - DepEd Partnership Database System': DpdsForm,
@@ -1332,32 +1401,95 @@ def create_ticket_form(service_id):
     }
     FormClass = form_map.get(service.name, GeneralTicketForm)
     form = FormClass()
+    
+    # --- Pre-fill form (Walang binago) ---
     if request.method == 'GET' and current_user.is_authenticated:
         form.requester_email.data = current_user.email
         form.requester_name.data = current_user.name
         
     if form.validate_on_submit():
+        
+        # --- SIMULA NG FILE VALIDATION LOGIC ---
+        files_to_save = {} # Store {field_name: FileStorage_object} for valid files
+        validation_passed = True
+        
+        for field in form:
+            # Check only FileFields that actually have data
+            if field.type == 'FileField' and field.data:
+                file = field.data
+                filename = secure_filename(file.filename) # Get safe filename early
+                field_label = field.label.text # Get the field label for error messages
+
+                # 1. Size Check
+                try:
+                    file.seek(0, os.SEEK_END) # Go to the end of the file stream
+                    file_size = file.tell()   # Get the position (which is the size in bytes)
+                    file.seek(0)              # IMPORTANT: Go back to the start of the stream
+                    
+                    if file_size == 0:
+                         flash(f"File '{filename}' for '{field_label}' appears to be empty. Please upload a valid file.", 'warning')
+                         validation_passed = False
+                         # Don't break here, let other checks proceed, but mark as failed
+
+                    elif file_size > MAX_FILE_SIZE_BYTES:
+                        flash(f"File '{filename}' ({field_label}) exceeds the {app.config['MAX_FILE_SIZE_MB']}MB size limit. Please upload a smaller file.", 'danger')
+                        validation_passed = False
+                        # Optional: break here if you want to stop checking immediately on first large file
+                        # break 
+
+                except Exception as e:
+                    app.logger.error(f"Error checking size for file '{filename}' ({field_label}): {e}")
+                    flash(f"Could not determine the size of file '{filename}'. Please try uploading again.", 'danger')
+                    validation_passed = False
+                    # Optional: break here
+
+                # 2. Type Check (Double check, FileAllowed should catch most)
+                # Check only if filename is not empty after securing
+                if filename and ('.' not in filename or \
+                   filename.rsplit('.', 1)[1].lower() not in ALLOWED_EXTENSIONS):
+                     flash(f"File type for '{filename}' ({field_label}) is not allowed. Allowed types are: {', '.join(sorted(ALLOWED_EXTENSIONS))}.", 'danger')
+                     validation_passed = False
+                     # Optional: break here
+
+                # If all checks for this file passed so far, add it to the list to be saved
+                if validation_passed and file_size > 0: 
+                    files_to_save[field.name] = file # Store the FileStorage object
+
+        # If any validation failed, stop processing and re-render the form
+        if not validation_passed:
+             return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
+        # --- TAPOS NG FILE VALIDATION LOGIC ---
+
+        # --- Proceed only if all validations passed ---
         details_data = {}
-        general_fields = {field.name for field in GeneralTicketForm()}
+        general_fields = {f.name for f in GeneralTicketForm()}
         for field in form:
             if field.name not in general_fields and field.type not in ['FileField', 'CSRFTokenField', 'SubmitField']:
                 if field.type == 'DateField':
                     details_data[field.name] = field.data.strftime('%Y-%m-%d') if field.data else None
                 else:
                     details_data[field.name] = field.data
-        saved_filenames = []
-        for field in form:
-            if field.type == 'FileField' and hasattr(field, 'data') and field.data:
-                try: 
-                    file = field.data
-                    filename = secure_filename(f"{field.name}_{file.filename}")
-                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                    saved_filenames.append(filename)
-                except Exception as e:
-                    app.logger.error(f"Error saving attachment during ticket creation for service {service_id}: {e}\n{traceback.format_exc()}")
-                    flash(f'An error occurred while uploading file for {field.label.text}. Please try again.', 'danger')
-                    return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
-                
+
+        # --- Save validated files ---
+        saved_filenames_map = {} # Store {original_field_name: saved_filename}
+        try:
+            for field_name, file_to_save in files_to_save.items():
+                original_filename = secure_filename(file_to_save.filename)
+                timestamp = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f') # Added microseconds for more uniqueness
+                # Create a more unique filename
+                filename_to_save = f"{timestamp}_{field_name}_{original_filename}" 
+                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename_to_save)
+                file_to_save.save(save_path)
+                saved_filenames_map[field_name] = filename_to_save
+                app.logger.info(f"Successfully saved file: {filename_to_save}")
+        except Exception as e:
+            app.logger.error(f"Error saving validated files for service {service_id}: {e}\n{traceback.format_exc()}")
+            flash(f'An error occurred while saving attachments. Please try submitting again.', 'danger')
+            # Consider deleting already saved files if needed, then re-render
+            # For simplicity now, just re-render
+            return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
+            
+        # --- Ticket Number Generation (Walang binago) ---
         current_year = datetime.now(timezone.utc).year
         dept_code_map = {"ICT": "ICT", "Personnel": "PERS", "Legal Services": "LEGAL", "Office of the SDS": "SDS", "Accounting Unit": "ACCT", "Supply Office": "SUP"}
         dept_code = dept_code_map.get(service.department.name, "GEN")
@@ -1366,6 +1498,7 @@ def create_ticket_form(service_id):
         new_sequence = (int(last_ticket.ticket_number.split('-')[-1]) + 1) if last_ticket else 1
         new_ticket_number = f'{dept_code}-{current_year}-{new_sequence:04d}'
         
+        # --- Create and Save Ticket (Walang binago) ---
         new_ticket = Ticket(
             ticket_number=new_ticket_number,
             requester_name=form.requester_name.data,
@@ -1377,24 +1510,37 @@ def create_ticket_form(service_id):
             status='Open',
             details=details_data
         )
-        db.session.add(new_ticket)
-        db.session.commit() # Commit muna para makuha ang ID
-        
-        # Attach files using the new ticket ID
-        for fname in saved_filenames:
-            db.session.add(Attachment(filename=fname, ticket_id=new_ticket.id))
-        db.session.commit() # Commit ulit para sa attachments
-        
-        app.logger.info(f"New ticket {new_ticket_number} created by {form.requester_email.data} for service '{service.name}'")
-        send_new_ticket_email(new_ticket)
-        flash(f'Your ticket has been created! A confirmation has been sent to your email. Your ticket number is {new_ticket_number}.', 'success')
-        
-        if current_user.is_authenticated:
-            return redirect(url_for('my_tickets'))
-        else:
-            return redirect(url_for('select_department')) 
+        try:
+            db.session.add(new_ticket)
+            # Important: Commit here to get the new_ticket.id
+            db.session.commit() 
+            
+            # --- Save Attachment Records to DB ---
+            for saved_filename in saved_filenames_map.values():
+                db.session.add(Attachment(filename=saved_filename, ticket_id=new_ticket.id))
+            
+            # Final commit for attachments
+            db.session.commit() 
+            
+            app.logger.info(f"New ticket {new_ticket_number} created by {form.requester_email.data} for service '{service.name}' with {len(saved_filenames_map)} attachments.")
+            send_new_ticket_email(new_ticket)
+            flash(f'Your ticket has been created! A confirmation has been sent to your email. Your ticket number is {new_ticket_number}.', 'success')
+            
+            if current_user.is_authenticated:
+                return redirect(url_for('my_tickets'))
+            else:
+                return redirect(url_for('select_department')) 
+        except Exception as e:
+            db.session.rollback() # Rollback changes if DB error occurs
+            app.logger.error(f"Database error creating ticket {new_ticket_number} or attachments: {e}\n{traceback.format_exc()}")
+            flash('A database error occurred while creating the ticket. Please try again.', 'danger')
+            # Optional: Attempt to delete saved files here if DB fails
+            return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
 
+    # --- Render form on GET or if validation fails (basic WTForms validation) ---
     return render_template('create_ticket_form.html', form=form, service=service, title=f'Request for {service.name}')
+
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():

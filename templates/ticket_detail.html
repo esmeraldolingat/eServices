@@ -153,7 +153,7 @@
 
                         <div class="mb-3">
                             {{ form.attachment.label(class="form-label") }}
-                            {{ form.attachment(class="form-control") }}
+                            {{ form.attachment(class="form-control", accept="application/pdf") }}
                             {% for error in form.attachment.errors %}
                                 <div class="text-danger small mt-1">{{ error }}</div>
                             {% endfor %}
