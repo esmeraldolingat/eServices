@@ -1,12 +1,14 @@
 import os
 import json
 from datetime import datetime, timezone
-from flask import Flask, render_template, request, redirect, url_for, flash, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify # Keep this one
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 from flask_mail import Mail, Message
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from functools import wraps
 import csv
 import io
@@ -15,10 +17,8 @@ from sqlalchemy import func, case, extract, or_
 from sqlalchemy.orm import joinedload
 import logging
 from logging.handlers import RotatingFileHandler
-import traceback # Para sa mas detailed error logging
-from werkzeug.exceptions import HTTPException 
-from flask import jsonify 
-from datetime import timezone
+import traceback
+from werkzeug.exceptions import HTTPException
 
 load_dotenv()
 
@@ -95,6 +95,16 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 mail = Mail(app)
+
+# --- Initialize Flask-Limiter ---
+limiter = Limiter(
+    key_func=get_remote_address,  # Gamitin ang IP address para i-track ang user
+    app=app,                      
+    default_limits=["100 per day", "30 per hour"], # Basic limit para sa lahat ng pages
+    storage_uri="memory://"       # Simpleng storage para ngayon (mawawala pag restart)
+    # Para sa production, gamitin: storage_uri="redis://localhost:6379" (kung may Redis ka)
+)
+# --- End Flask-Limiter Init ---
 
 # --- Logging Setup ---
 if not app.debug: # I-enable lang ang file logging kapag HINDI naka-debug mode
@@ -1558,7 +1568,13 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html', form=form, title='Register')
 
+
+# =================================================================
+# === LIMITER SA LOGIN KAPAG MALI ========
+# =================================================================
+
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("40 per 2 hours; 10 per minute")
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
@@ -1615,10 +1631,10 @@ def check_new_tickets():
         'new_count': new_count,
         'latest_timestamp': latest_timestamp_iso 
     })
+
 # =================================================================
 # === TAPOS NG ROUTE ==============================================
 # =================================================================
-
 
 @app.route('/logout')
 @login_required
@@ -1629,7 +1645,14 @@ def logout():
     flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
+
+
+# =================================================================
+# === reset_request ==============================================
+# =================================================================
+
 @app.route("/reset_password", methods=['GET', 'POST'])
+@limiter.limit("10 per day; 5 per hour")
 def reset_request():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
@@ -1662,6 +1685,24 @@ def reset_token(token):
         flash('Your password has been updated! You are now able to log in', 'success')
         return redirect(url_for('login'))
     return render_template('reset_token.html', title='Reset Password', form=form)
+
+
+
+# --- Handler para sa Rate Limit  ---
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Custom handler para kapag na-exceed ang request limit."""
+    app.logger.warning(f"Rate limit exceeded: {e.description} for IP {request.remote_addr} on route {request.endpoint}")
+    # Subukan ulit i-render ang template
+    try:
+         return render_template("429.html"), 429 
+    except Exception as render_error:
+         # Kung mag-error pa rin ang pag-render, i-log natin at mag-fallback
+         app.logger.error(f"!!! Error rendering 429.html: {render_error} !!!")
+         # Fallback to simple text response
+         return f"Too Many Requests ({e.description}). Error rendering custom page.", 429
+
+# --- TAPOS NG BAGONG ERROR HANDLER ---
 
 @app.errorhandler(Exception)
 def handle_exception(e):

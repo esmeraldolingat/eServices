@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 text-center">
+
+            {# Gamitin natin ang primary color ng system mo para sa numero #}
+            <h1 class="display-1 text-primary" style="font-size: 8rem; font-weight: 300;"> 
+                {# Mas bagay na icon siguro ang stopwatch or warning? Subukan natin ang clock muna. #}
+                <i class="bi bi-clock-history"></i> 
+                429
+            </h1>
+
+            <h2 class="mb-3">Too Many Requests</h2>
+
+            <p class="lead mb-4">
+                Oops! You've made too many requests in a short period. 
+                This limit is in place to protect the system.
+            </p>
+
+            {# Mas specific na instruction #}
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i> Please wait for a minute or two before trying again.
+            </div>
+
+            {# Button pabalik sa home, gamit ang secondary color para hindi kasing-prominente ng primary actions #}
+            <a href="{{ url_for('home') }}" class="btn btn-outline-secondary btn-lg mt-4">
+                <i class="bi bi-house-fill me-2"></i> Go Back Home
+            </a>
+
+        </div>
+    </div>
+</div>
+{% endblock content %}
