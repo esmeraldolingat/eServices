@@ -1,9 +1,10 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, SubmitField, PasswordField, TextAreaField, DateField
+from wtforms import StringField, SelectField, SubmitField, PasswordField, TextAreaField, DateField, BooleanField
 from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, EqualTo
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from sqlalchemy import case
 from flask_login import current_user
+
 
 # Import all necessary models
 from models import School, AuthorizedEmail, User, Department, Service
@@ -107,11 +108,17 @@ class ResponseForm(FlaskForm):
     attachment = FileField('Add Attachment (Optional)', validators=[Optional(), FileAllowed(['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'], 'Allowed file types are: pdf, images, word docs')])
     submit = SubmitField('Submit Response')
 
+
 class UpdateTicketForm(FlaskForm):
-    body = TextAreaField('Response / Resolution Details', validators=[DataRequired()])
+    body = TextAreaField('Response / Resolution Details (Optional)', validators=[Optional()])
     status = SelectField('Update Status', choices=[('Open', 'Open'), ('In Progress', 'In Progress'), ('Resolved', 'Resolved')], validators=[DataRequired()])
     attachment = FileField('Add Attachment (Optional)', validators=[Optional(), FileAllowed(['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'], 'Allowed file types are: pdf, images, word docs')])
     submit = SubmitField('Submit Update')
+    assigned_staff = SelectField('Assign to', coerce=int, validators=[Optional()])
+    is_internal = BooleanField('Internal Note (Check if this response should NOT be seen by the requester)')
+   
+    submit = SubmitField('Update Ticket')
+
 
 # ======================================================
 # === ICT DEPARTMENT FORMS =============================

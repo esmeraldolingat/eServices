@@ -9,6 +9,7 @@ from werkzeug.utils import secure_filename
 from flask_mail import Mail, Message
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_login import login_user, current_user, logout_user, login_required
 from functools import wraps
 import csv
 import io
@@ -19,6 +20,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import traceback
 from werkzeug.exceptions import HTTPException
+from models import Response as TicketResponse 
 
 load_dotenv()
 
@@ -41,15 +43,12 @@ from forms import (
 # --- App Initialization and Config ---
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
-
 app.secret_key = os.getenv('SECRET_KEY')
 
 
-# --- App Initialization and Config ---
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-# --- SIMULA NG BAGONG CONFIGURATIONS ---
 # Maximum file size per upload (in Megabytes)
 app.config['MAX_FILE_SIZE_MB'] = 25 
 # Calculate bytes (1MB = 1024 * 1024 bytes)
@@ -60,10 +59,6 @@ ALLOWED_EXTENSIONS = {'pdf'}
 # --- TAPOS NG BAGONG CONFIGURATIONS ---
 
 app.secret_key = os.getenv('SECRET_KEY')
-
-# ... (Database Configuration, etc. - walang binago dito) ...
-
-
 
 # --- Database Configuration ---
 MYSQL_USER = os.getenv('MYSQL_USER', 'root')
@@ -96,15 +91,41 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 mail = Mail(app)
 
+
+# ==============================================================
+# === FLASH LIMITER ============================================
+# ==============================================================
+
+def smarter_key_func():
+    """
+    Gumagamit ng User ID para sa logged-in users,
+    at IP address para sa anonymous users (mga nasa login page).
+    """
+    if current_user.is_authenticated:
+        # Gumagamit tayo ng string para malinaw, e.g., "user-1"
+        return f"user-{current_user.id}" 
+    else:
+        # Ito ang gagamitin para sa mga bisita sa login page
+        return get_remote_address()
+
 # --- Initialize Flask-Limiter ---
 limiter = Limiter(
-    key_func=get_remote_address,  # Gamitin ang IP address para i-track ang user
-    app=app,                      
-    default_limits=["100 per day", "30 per hour"], # Basic limit para sa lahat ng pages
-    storage_uri="memory://"       # Simpleng storage para ngayon (mawawala pag restart)
+    app=app,
+    key_func=smarter_key_func,  # Gagamitin na natin 'yung bago nating "smart" function
+
+    # Itinaas na natin ang default limit.
+    # Dahil "per user" na ito (at hindi "per IP"),
+    # imposible mo nang ma-hit ito sa normal na pag-refresh.
+    default_limits=["500 per 5 minutes", "2000 per hour"],
+
+    storage_uri="memory://" 
     # Para sa production, gamitin: storage_uri="redis://localhost:6379" (kung may Redis ka)
 )
-# --- End Flask-Limiter Init ---
+
+# ==============================================================
+# === END OF FLASH LIMITER ============================================
+# ==============================================================
+
 
 # --- Logging Setup ---
 if not app.debug: # I-enable lang ang file logging kapag HINDI naka-debug mode
@@ -251,6 +272,7 @@ TCSD e-Services Team
         app.logger.info(f"Resolution email sent successfully to {ticket.requester_email} for ticket {ticket.ticket_number}")
     except Exception as e:
         app.logger.error(f"Error sending resolution email to {ticket.requester_email} for ticket {ticket.ticket_number}: {e}\n{traceback.format_exc()}")
+
 
 
 # =================================================================
@@ -403,8 +425,9 @@ def home():
 
 
 # =================================================================
-# === SIMULA NG PAGBABAGO: Inayos na staff_dashboard function ======
+# === staff_dashboard function ======
 # =================================================================
+
 @app.route('/staff-dashboard')
 @login_required
 def staff_dashboard():
@@ -416,6 +439,11 @@ def staff_dashboard():
     page_active = request.args.get('page_active', 1, type=int)
     page_resolved = request.args.get('page_resolved', 1, type=int)
     search_query = request.args.get('search', '').strip()
+    
+    # --- BAGONG DAGDAG: Kunin ang bagong filter view ---
+    # Ang default ay 'all_managed' para sa Staff, at 'all_system' para sa Admin
+    default_view = 'all_managed' if current_user.role == 'Staff' else 'all_system'
+    filter_view = request.args.get('filter_view', default_view)
     
     # --- Year/Quarter Filtering Logic (Walang binago dito) ---
     available_years_query = db.session.query(extract('year', Ticket.date_posted)).distinct().order_by(extract('year', Ticket.date_posted).desc())
@@ -433,29 +461,54 @@ def staff_dashboard():
         4: (datetime(selected_year, 10, 1, tzinfo=timezone.utc), datetime(selected_year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)),
     }
     
-    # --- Base Query for Tickets & Staff Filtering (Walang binago) ---
+    # --- Base Query for Tickets & Staff Filtering ---
     ticket_base_query = Ticket.query.options(db.joinedload(Ticket.school), db.joinedload(Ticket.service_type))
-    managed_service_ids = None # Initialize para malaman kung Staff
+    managed_service_ids = None 
+    
+    # --- NA-UPDATE: Nagdagdag ng title variable ---
+    title = "" # I-de-define natin sa baba
+    
     if current_user.role == 'Staff':
         managed_service_ids = [service.id for service in current_user.managed_services]
         if not managed_service_ids:
             flash("You are not assigned to any services. Please contact an administrator.", "warning")
             app.logger.warning(f"Staff user {current_user.email} has no assigned services.")
-            # Important: Still need to return the template structure even if empty
             empty_paginate = db.paginate(db.select(Ticket).where(db.false()), page=1, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
             return render_template('staff_dashboard.html', 
                                    active_tickets=empty_paginate, 
                                    resolved_tickets=empty_paginate, 
                                    dashboard_summary={}, 
-                                   school_summary={}, # Ipasa rin ang empty school summary
-                                   title="My Managed Tickets", 
+                                   school_summary={},
+                                   title="My Managed Tickets", # Updated Title
                                    available_years=available_years, 
                                    selected_year=selected_year, 
                                    selected_quarter=selected_quarter, 
-                                   search_query=search_query)
+                                   search_query=search_query,
+                                   filter_view=filter_view) # Ipasa ang filter_view
+        
+        # Palaging i-filter sa managed services para sa staff
         ticket_base_query = ticket_base_query.filter(Ticket.service_id.in_(managed_service_ids))
+        
+        # --- BAGONG DAGDAG: I-apply ang "My Assigned" filter para sa Staff ---
+        if filter_view == 'my_assigned':
+            ticket_base_query = ticket_base_query.filter(Ticket.assigned_staff_id == current_user.id)
+            title = "My Assigned Tickets"
+        else:
+            # Ang default para sa Staff ay 'all_managed'
+            title = "My Managed Services Tickets"
+            filter_view = 'all_managed' # Siguraduhin na ito ang active view
+            
+    else: # Para sa Admin
+        # --- BAGONG DAGDAG: I-apply ang "My Assigned" filter para sa Admin ---
+        if filter_view == 'my_assigned':
+            ticket_base_query = ticket_base_query.filter(Ticket.assigned_staff_id == current_user.id)
+            title = "My Assigned Tickets"
+        else:
+            # Ang default para sa Admin ay 'all_system'
+            title = "All System Tickets"
+            filter_view = 'all_system' # Siguraduhin na ito ang active view
 
-    # --- Apply Search or Date Filters to Ticket Query (Walang binago) ---
+    # --- Apply Search or Date Filters to Ticket Query (Walang binago dito) ---
     if search_query:
         search_term = f"%{search_query}%"
         ticket_base_query = ticket_base_query.join(School, Ticket.school_id == School.id, isouter=True).filter(
@@ -466,116 +519,109 @@ def staff_dashboard():
             )
         )
     else:
-        # Apply year filter always when not searching
+        # Apply year/quarter filters (walang binago)
         ticket_base_query = ticket_base_query.filter(extract('year', Ticket.date_posted) == selected_year)
-        # Apply quarter filter if selected
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
-            # Ensure comparison is timezone-aware if date_posted is
             ticket_base_query = ticket_base_query.filter(Ticket.date_posted.between(start_date, end_date))
 
-    # --- Paginate Active/Resolved Tickets (Walang binago) ---
+    # --- Paginate Active/Resolved Tickets (Walang binago dito) ---
     status_order = case((Ticket.status == 'Open', 1), (Ticket.status == 'In Progress', 2), else_=3)
     active_tickets = db.paginate(ticket_base_query.filter(Ticket.status.in_(['Open', 'In Progress'])).order_by(status_order, Ticket.date_posted.desc()), 
                                  page=page_active, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
     resolved_tickets = db.paginate(ticket_base_query.filter(Ticket.status == 'Resolved').order_by(Ticket.date_posted.desc()), 
                                    page=page_resolved, per_page=app.config['TICKETS_PER_PAGE'], error_out=False)
     
-    # --- Generate Department Summary (Logic mostly the same, used for Dept Tab) ---
+    # --- Generate Department Summary ---
     dashboard_summary = {}
     if not search_query: # Summary only shown when not searching
         dept_summary_query = db.session.query(
             Department.name.label('dept_name'),
             Service.name.label('service_name'),
-            Service.id.label('service_id'), # Added service_id
+            Service.id.label('service_id'),
             func.count(Ticket.id).label('total'),
             func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
         ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(Department, Service.department_id == Department.id)
 
-        # Apply Year/Quarter filters
+        # Apply Year/Quarter filters (walang binago)
         dept_summary_query = dept_summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
             dept_summary_query = dept_summary_query.filter(Ticket.date_posted.between(start_date, end_date))
 
-        # Apply Staff filter if applicable
+        # Apply Staff filter if applicable (walang binago)
         if managed_service_ids is not None:
              dept_summary_query = dept_summary_query.filter(Service.id.in_(managed_service_ids))
         
+        # --- BAGONG DAGDAG: I-apply din ang filter sa summary query! ---
+        if filter_view == 'my_assigned':
+            dept_summary_query = dept_summary_query.filter(Ticket.assigned_staff_id == current_user.id)
+            
         dept_summary_data = dept_summary_query.group_by(Department.name, Service.name, Service.id).all()
         
-        # Determine relevant departments for the user
+        # (Ang natitirang logic para sa pag-process ng summary ay walang binago)
         if current_user.role == 'Admin':
             all_departments = Department.query.options(db.joinedload(Department.services)).order_by(Department.name).all()
         else: # Staff
             all_departments = Department.query.join(Service).filter(Service.id.in_(managed_service_ids)).options(db.joinedload(Department.services.and_(Service.id.in_(managed_service_ids)))).order_by(Department.name).distinct().all()
-
-        color_palette = ['#FE9321', '#6FE3CC', '#185D7A', '#C8DB2A', '#EF4687', '#5BC0DE', '#F0AD4E', '#D9534F'] # Added more colors
-
+        color_palette = ['#FE9321', '#6FE3CC', '#185D7A', '#C8DB2A', '#EF4687', '#5BC0DE', '#F0AD4E', '#D9534F']
         for dept in all_departments:
             dept_services_data = []
             department_total_tickets = 0
-            # Ensure we only iterate services relevant to staff
             services_in_dept = sorted([s for s in dept.services if managed_service_ids is None or s.id in managed_service_ids], key=lambda s: s.name)
             
             for i, service in enumerate(services_in_dept):
                 found_data = next((row for row in dept_summary_data if row.dept_name == dept.name and row.service_id == service.id), None)
-                
                 if found_data:
                     resolved = found_data.resolved_count
                     total = found_data.total
                     active = total - resolved
                     dept_services_data.append({
-                        'name': service.name, 
-                        'active': active, 
-                        'resolved': resolved, 
-                        'total': total, 
+                        'name': service.name, 'active': active, 'resolved': resolved, 'total': total, 
                         'resolved_percent': int(resolved / total * 100) if total > 0 else 0,
                         'color': color_palette[i % len(color_palette)]
                     })
                     department_total_tickets += total
-                else: # Service exists but has 0 tickets in the period
+                else: 
                      dept_services_data.append({
-                        'name': service.name, 
-                        'active': 0, 
-                        'resolved': 0, 
-                        'total': 0, 
-                        'resolved_percent': 0,
-                        'color': color_palette[i % len(color_palette)]
+                        'name': service.name, 'active': 0, 'resolved': 0, 'total': 0, 
+                        'resolved_percent': 0, 'color': color_palette[i % len(color_palette)]
                     })
-
-            if dept_services_data: # Only add department if it has relevant services
+            if dept_services_data: 
                 dashboard_summary[dept.name] = {
                     'services': dept_services_data,
                     'department_total': department_total_tickets,
-                    'service_count': len(dept_services_data) # Add service count here
+                    'service_count': len(dept_services_data)
                 }
 
-    # --- BAGONG LOGIC: Generate School Summary (For School Tab) ---
+    # --- Generate School Summary ---
     school_summary = {}
-    if not search_query: # Summary only shown when not searching
+    if not search_query: 
         school_summary_query = db.session.query(
             School.name.label('school_name'),
             Service.name.label('service_name'),
-            Service.id.label('service_id'), # Added service_id
+            Service.id.label('service_id'),
             func.count(Ticket.id).label('total'),
             func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
-        ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(School, Ticket.school_id == School.id) # Ensure School join is correct
+        ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(School, Ticket.school_id == School.id)
 
-        # Apply Year/Quarter filters
+        # Apply Year/Quarter filters (walang binago)
         school_summary_query = school_summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
             school_summary_query = school_summary_query.filter(Ticket.date_posted.between(start_date, end_date))
 
-        # Apply Staff filter if applicable
+        # Apply Staff filter if applicable (walang binago)
         if managed_service_ids is not None:
              school_summary_query = school_summary_query.filter(Service.id.in_(managed_service_ids))
 
-        # Group by School and Service
+        # --- BAGONG DAGDAG: I-apply din ang filter sa summary query! ---
+        if filter_view == 'my_assigned':
+            school_summary_query = school_summary_query.filter(Ticket.assigned_staff_id == current_user.id)
+            
         school_summary_data_flat = school_summary_query.group_by(School.name, Service.name, Service.id).order_by(School.name, Service.name).all()
 
-        # Transform flat data into nested dictionary
+        # (Ang natitirang logic para sa pag-process ng summary ay walang binago)
         for row in school_summary_data_flat:
             school_name = row.school_name
             if school_name not in school_summary:
@@ -586,28 +632,28 @@ def staff_dashboard():
             active = total - resolved
             
             school_summary[school_name]['services'].append({
-                'name': row.service_name,
-                'active': active,
-                'resolved': resolved,
-                'total': total
+                'name': row.service_name, 'active': active, 'resolved': resolved, 'total': total
             })
             school_summary[school_name]['total_school_tickets'] += total
             
-    # --- Ipasa lahat sa template ---
+    # --- NA-UPDATE: Ipasa ang mga bagong variables sa template ---
     return render_template('staff_dashboard.html', 
                            active_tickets=active_tickets, 
                            resolved_tickets=resolved_tickets, 
                            dashboard_summary=dashboard_summary, 
-                           school_summary=school_summary, # Ipasa ang bagong data
-                           title="System Dashboard", 
+                           school_summary=school_summary,
+                           title=title, # Gagamitin 'yung dynamic title
                            available_years=available_years, 
                            selected_year=selected_year, 
                            selected_quarter=selected_quarter, 
-                           search_query=search_query)
-# =================================================================
-# === TAPOS NG PAGBABAGO: Ang natitirang code ay pareho na ========
-# =================================================================
+                           search_query=search_query,
+                           filter_view=filter_view) # Ipasa ang active filter
 
+
+
+# =================================================================
+# === EXPORT-TICKETS ========
+# =================================================================
 
 @app.route('/export-tickets')
 @login_required
@@ -704,6 +750,11 @@ def my_tickets():
     return render_template('my_tickets.html', active_tickets=active_tickets, resolved_tickets=resolved_tickets, title='My Tickets', search_query=search_query)
 
 
+
+# =================================================================
+# === TICKET DETAIL ========
+# =================================================================
+
 @app.route('/ticket/<int:ticket_id>', methods=['GET', 'POST'])
 @login_required
 def ticket_detail(ticket_id):
@@ -717,6 +768,17 @@ def ticket_detail(ticket_id):
     
     if is_staff_or_admin:
         form = UpdateTicketForm()
+        
+        # --- (Step 1: Populate the Dropdown) ---
+        try:
+            assignable_staff = ticket.service_type.managers.order_by(User.name).all() 
+            form.assigned_staff.choices = [(user.id, user.name) for user in assignable_staff]
+            form.assigned_staff.choices.insert(0, (0, '-- Unassigned --'))
+        
+        except Exception as e:
+            app.logger.error(f"Error fetching assignable staff for service {ticket.service_id}: {e}")
+            form.assigned_staff.choices = [(0, '-- Error Loading Staff --')]
+            
     else:
         if ticket.requester_email != current_user.email:
              flash('You do not have permission to view this ticket.', 'danger')
@@ -724,7 +786,7 @@ def ticket_detail(ticket_id):
              return redirect(url_for('home'))
         form = ResponseForm()
 
-    # --- Canned Response Query (Walang binago dito, gamit ang inayos na version) ---
+    # --- Canned Response Query (Walang binago dito) ---
     system_canned_responses = []
     personal_canned_responses = []
     if is_staff_or_admin:
@@ -742,15 +804,14 @@ def ticket_detail(ticket_id):
             flash('This ticket is already resolved and cannot receive new responses.', 'info')
             return redirect(url_for('ticket_detail', ticket_id=ticket.id))
         
-        # --- SIMULA NG FILE VALIDATION & HANDLING ---
-        file_to_save_object = None   # To hold the FileStorage object
-        filename_to_save_in_db = None # To hold the final filename for DB and saving
+        # --- FILE VALIDATION & HANDLING  ---
+        file_to_save_object = None
+        filename_to_save_in_db = None
         
         if form.attachment.data:
             file = form.attachment.data
             filename = secure_filename(file.filename)
             
-            # 1. Size Check
             try:
                 file.seek(0, os.SEEK_END)
                 file_size = file.tell()
@@ -758,83 +819,137 @@ def ticket_detail(ticket_id):
 
                 if file_size == 0:
                     flash(f"Attachment '{filename}' appears to be empty. Please upload a valid file.", 'warning')
-                    # Don't redirect yet, maybe they just want to add text
                 
                 elif file_size > MAX_FILE_SIZE_BYTES:
                     flash(f"Attachment '{filename}' exceeds the {app.config['MAX_FILE_SIZE_MB']}MB size limit. Response not submitted.", 'danger')
-                    return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect back
+                    return redirect(url_for('ticket_detail', ticket_id=ticket.id))
 
             except Exception as e:
                 app.logger.error(f"Error checking attachment size for ticket {ticket_id}: {e}")
                 flash(f"Could not check the size of attachment '{filename}'. Response not submitted.", 'danger')
-                return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect back
+                return redirect(url_for('ticket_detail', ticket_id=ticket.id))
 
-            # 2. Type Check (only if file has size)
             if file_size > 0 and filename and ('.' not in filename or \
-               filename.rsplit('.', 1)[1].lower() not in ALLOWED_EXTENSIONS):
-                 flash(f"Attachment file type for '{filename}' is not allowed. Allowed types are: {', '.join(sorted(ALLOWED_EXTENSIONS))}. Response not submitted.", 'danger')
-                 return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect back
+                filename.rsplit('.', 1)[1].lower() not in ALLOWED_EXTENSIONS):
+                  flash(f"Attachment file type for '{filename}' is not allowed. Allowed types are: {', '.join(sorted(ALLOWED_EXTENSIONS))}. Response not submitted.", 'danger')
+                  return redirect(url_for('ticket_detail', ticket_id=ticket.id))
 
-            # If checks passed and file has content, prepare for saving
             if file_size > 0:
                 timestamp = datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')
                 filename_to_save_in_db = f"{timestamp}_{filename}"
-                file_to_save_object = file # Keep the file object ready
+                file_to_save_object = file
         # --- TAPOS NG FILE VALIDATION & HANDLING ---
 
-        # --- Proceed with saving response and file (if validated) ---
+        # === SIMULA NG INAYOS NA TRY/EXCEPT BLOCK ===
         try:
-            # Save the file FIRST if it exists and was validated
+            # --- Flags para ma-track kung ano ang nagbago ---
+            response_was_added = False
+            status_was_changed = False
+            assignment_was_changed = False
+            new_response_object = None # Para ma-itago ang object para sa email
+
+            # --- 1. FILE HANDLING ---
             if file_to_save_object and filename_to_save_in_db:
                 save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename_to_save_in_db)
                 file_to_save_object.save(save_path)
                 app.logger.info(f"Successfully saved attachment: {filename_to_save_in_db} for ticket {ticket_id}")
-            
-            # Add response to DB
-            new_response = TicketResponse(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id)
-            db.session.add(new_response)
-            
-            # Add attachment record to DB if file was saved
-            if filename_to_save_in_db:
+                # Add attachment record to DB
                 db.session.add(Attachment(filename=filename_to_save_in_db, ticket_id=ticket.id))
             
-            # Update ticket status if applicable (staff/admin form)
+        
+            # I-check MUNA kung may laman bago i-save
+            if form.body.data and form.body.data.strip(): 
+                # Siguraduhin na 'TicketResponse' ang alias mo para sa 'Response' model
+                new_response = TicketResponse(body=form.body.data, user_id=current_user.id, ticket_id=ticket.id, is_internal=form.is_internal.data)
+                db.session.add(new_response)
+                response_was_added = True
+                new_response_object = new_response # Itago ang object para sa email mamaya
+            
+            # --- 3. FORM LOGIC (Staff/Admin) ---
             if hasattr(form, 'status'):
+                # Check Status Change
                 old_status = ticket.status
                 new_status = form.status.data
                 if old_status != new_status:
                     ticket.status = new_status
+                    status_was_changed = True
                     app.logger.info(f"Ticket {ticket_id} status changed from '{old_status}' to '{new_status}' by user {current_user.email}")
-                    if new_status == 'Resolved':
-                        send_resolution_email(ticket, form.body.data)
-                        flash('Your response has been added and a resolution email has been sent.', 'success')
+
+                # Check Assignment Change
+                new_staff_id = form.assigned_staff.data
+                
+                if new_staff_id == 0 and ticket.assigned_staff_id is not None:
+                    # -- Piniling "Unassigned" --
+                    ticket.assigned_staff_id = None
+                    assignment_was_changed = True
+                    flash('Ticket has been unassigned.', 'info')
+                    app.logger.info(f"Ticket {ticket_id} was unassigned by user {current_user.email}")
+                
+                elif new_staff_id != 0 and new_staff_id != ticket.assigned_staff_id:
+                    # -- May piniling staff --
+                    new_staff = db.session.get(User, new_staff_id)
+                    if new_staff and new_staff in ticket.service_type.managers:
+                        ticket.assigned_staff_id = new_staff_id
+                        assignment_was_changed = True
+                        flash(f'Ticket has been assigned to {new_staff.name}.', 'success')
+                        app.logger.info(f"Ticket {ticket_id} assigned to {new_staff.email} by user {current_user.email}")
                     else:
-                        flash('Your response has been added and the ticket status has been updated.', 'success')
-                else: # Status didn't change, just added response
+                        flash(f'Could not assign ticket: Invalid staff member selected.', 'danger')
+                
+                # --- 4. FLASH MESSAGE LOGIC (FIX para sa BUG #2) ---
+                if status_was_changed:
+                    if new_status == 'Resolved':
+                        # Gagamit ng response body kung meron, kung wala, default message
+                        email_body = form.body.data if response_was_added else "Your ticket has been resolved."
+                        send_resolution_email(ticket, email_body)
+                        flash('Ticket has been resolved and a notification email sent.', 'success')
+                    else:
+                        flash(f'Ticket status has been updated to {new_status}.', 'success')
+                
+                elif response_was_added and not status_was_changed:
+                    # Nag-add lang ng response pero 'di pinalitan ang status
                     flash('Your response has been added successfully!', 'success')
-            else: # User added a response
-                flash('Your response has been added successfully!', 'success')
-                # Notify staff only if the user (not staff/admin) added the response
-                if not is_staff_or_admin: 
-                    send_staff_notification_email(ticket, new_response)
-                    
-            db.session.commit() # Commit all changes (response, attachment record, status)
+                
+                elif not response_was_added and not status_was_changed and not assignment_was_changed:
+                    # Pinindot ang "Update" pero walang binago
+                    flash('No changes were made to the ticket.', 'info')
+
+            # --- 5. FORM LOGIC (User) ---
+            else: 
+                # Ito 'yung form ng regular user (ResponseForm)
+                if response_was_added:
+                    flash('Your response has been added successfully!', 'success')
+                    if not is_staff_or_admin and new_response_object: 
+                        # I-pass 'yung actual object para sa email notification
+                        send_staff_notification_email(ticket, new_response_object) 
+            
+            # --- 6. I-COMMIT LAHAT NG PAGBABAGO ---
+            db.session.commit() 
 
         except Exception as e:
             db.session.rollback()
-            app.logger.error(f"Error saving response/attachment for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
-            flash('An error occurred while saving the response or attachment. Please try again.', 'danger')
-            # Optional: Attempt to delete saved file if DB fails
+            app.logger.error(f"Error saving response/attachment/assignment for ticket {ticket_id}: {e}\n{traceback.format_exc()}")
+            flash('An error occurred while saving. Please try again.', 'danger')
         
-        return redirect(url_for('ticket_detail', ticket_id=ticket.id)) # Redirect after successful POST or error handling
+        return redirect(url_for('ticket_detail', ticket_id=ticket.id))
+    
+
     
     # --- GET Request logic (Walang binago) ---
     if request.method == 'GET' and hasattr(form, 'status'):
         form.status.data = ticket.status
         
+        if ticket.assigned_staff_id:
+            form.assigned_staff.data = ticket.assigned_staff_id
+        else:
+            form.assigned_staff.data = 0 # Default sa '-- Unassigned --'
+            
     details_pretty = json.dumps(ticket.details, indent=2) if ticket.details else "No additional details."
     
     return render_template('ticket_detail.html', ticket=ticket, details_pretty=details_pretty, form=form, is_staff_or_admin=is_staff_or_admin, system_canned_responses=system_canned_responses, personal_canned_responses=personal_canned_responses)
+
+
+
 
 @app.route('/ticket/<int:ticket_id>/delete', methods=['POST'])
 @login_required
@@ -953,6 +1068,8 @@ def delete_user(user_id):
         app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent user ID: {user_id}")
     return redirect(url_for('manage_users'))
 
+
+
 @app.route('/admin/authorized-emails', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -1015,6 +1132,10 @@ def manage_authorized_emails():
     
     return render_template('admin/authorized_emails.html', emails=emails, add_form=add_form, bulk_form=bulk_form, title='Manage Authorized Emails', search_query=search_query)
 
+
+
+
+
 @app.route('/admin/authorized-emails/<int:email_id>/delete', methods=['POST'])
 @login_required
 @admin_required
@@ -1031,12 +1152,14 @@ def delete_authorized_email(email_id):
         app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent authorized email ID: {email_id}")
     return redirect(url_for('manage_authorized_emails'))
 
+
 @app.route('/admin/departments')
 @login_required
 @admin_required
 def manage_departments():
     departments = Department.query.order_by(Department.name).all()
     return render_template('admin/departments.html', departments=departments, title='Manage Departments')
+
 
 @app.route('/admin/department/add', methods=['GET', 'POST'])
 @login_required
@@ -1052,6 +1175,7 @@ def add_department():
         flash(f'Department "{dept_name}" has been created.', 'success')
         return redirect(url_for('manage_departments'))
     return render_template('admin/add_edit_department.html', form=form, title='Add Department')
+
 
 @app.route('/admin/department/<int:dept_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -1083,6 +1207,7 @@ def edit_department(dept_id):
         
     return render_template('admin/add_edit_department.html', form=form, title='Edit Department', department=dept)
 
+
 @app.route('/admin/department/<int:dept_id>/delete', methods=['POST'])
 @login_required
 @admin_required
@@ -1110,6 +1235,7 @@ def delete_department(dept_id):
         app.logger.warning(f"Admin {current_user.email} attempted to delete non-existent department ID: {dept_id}")
     return redirect(url_for('manage_departments'))
 
+
 @app.route('/admin/services')
 @login_required
 @admin_required
@@ -1118,6 +1244,7 @@ def manage_services():
                            .options(joinedload(Service.department)) \
                            .order_by(Department.name, Service.name).all()
     return render_template('admin/manage_services.html', services=services, title='Manage Services')
+
 
 @app.route('/admin/service/add', methods=['GET', 'POST'])
 @login_required
@@ -1685,8 +1812,6 @@ def reset_token(token):
         flash('Your password has been updated! You are now able to log in', 'success')
         return redirect(url_for('login'))
     return render_template('reset_token.html', title='Reset Password', form=form)
-
-
 
 # --- Handler para sa Rate Limit  ---
 @app.errorhandler(429)

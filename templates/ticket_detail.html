@@ -34,7 +34,16 @@
                     <p class="card-text mb-1"><strong>Requester:</strong> {{ ticket.requester_name }} ({{ ticket.requester_email }})</p>
                     <p class="card-text mb-1"><strong>School/Office:</strong> {{ ticket.school.name if ticket.school else 'N/A' }}</p>
                     <p class="card-text mb-1"><strong>Submitted On:</strong> {{ ticket.date_posted.strftime('%B %d, %Y at %I:%M %p') }}</p>
-                </div>
+                    
+                    <p class="card-text mb-1 mt-3">
+                        <strong>Assigned to:</strong>
+                        {% if ticket.assigned_staff %}
+                            <span class="badge bg-info text-dark"><i class="bi bi-person-fill me-1"></i>{{ ticket.assigned_staff.name }}</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Unassigned</span>
+                        {% endif %}
+                    </p>
+                    </div>
             </div>
 
             <div class="card mb-4">
@@ -45,7 +54,8 @@
                     {% if ticket.details %}
                         {% for key, value in ticket.details.items() %}
                             {% if 'other' in key.lower() and ticket.details.get(key.replace('_other', '')) != 'Other' %}
-                                {% elif value and value != 'N/A' %}
+                                {# Huwag ipakita ang "other" field kung 'yung parent field ay hindi "Other" #}
+                            {% elif value and value != 'N/A' %}
                                 <p class="card-text mb-2">
                                     <strong>{{ key.replace('_', ' ').title() }}:</strong> 
                                     {{ value }}
@@ -73,24 +83,38 @@
             </div>
             {% endif %}
 
-            <h4 class="mb-3"><i class="bi bi-chat-dots-fill me-2"></i>Conversation History</h4>
-            {% if ticket.responses %}
-                {% for response in ticket.responses %}
-                <div class="card mb-3">
-                    <div class="card-body">
-                        {# |safe ay tinitiyak na ang line breaks (kung meron) ay gagana #}
-                        <p class="card-text" style="white-space: pre-wrap;">{{ response.body | safe }}</p> 
+          <h4 class="mb-3"><i class="bi bi-chat-dots-fill me-2"></i>Conversation History</h4>
+        {% if ticket.responses %}
+            {% for response in ticket.responses %}
+
+                {# --- BAGONG DAGDAG: Check kung dapat ipakita ang response --- #}
+                {% if not response.is_internal or is_staff_or_admin %}
+
+                    {# --- BAGONG DAGDAG: Maglagay ng special style para sa internal notes --- #}
+                    <div class="card mb-3 {% if response.is_internal %}border-warning bg-light{% endif %}"> 
+                        <div class="card-body">
+
+                            {# --- BAGONG DAGDAG: Maglagay ng label kung internal note --- #}
+                            {% if response.is_internal %}
+                                <span class="badge bg-warning text-dark mb-2"><i class="bi bi-eye-slash-fill me-1"></i> Internal Note</span>
+                            {% endif %}
+
+                            <p class="card-text" style="white-space: pre-wrap;">{{ response.body | safe }}</p> 
+                        </div>
+                        <div class="card-footer text-muted small">
+                            by <strong>{{ response.author.name }}</strong> on {{ response.date_posted.strftime('%B %d, %Y at %I:%M %p') }}
+                        </div>
                     </div>
-                    <div class="card-footer text-muted small">
-                        by <strong>{{ response.author.name }}</strong> on {{ response.date_posted.strftime('%B %d, %Y at %I:%M %p') }}
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="alert alert-light" role="alert">
-                    No responses yet.
-                </div>
-            {% endif %}
+
+                {# --- BAGONG DAGDAG: Tapos ng IF condition --- #}
+                {% endif %} 
+
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-light" role="alert">
+                No responses yet.
+            </div>
+        {% endif %}
         </div>
 
         <div class="col-lg-4">
@@ -110,6 +134,15 @@
                         </div>
                         {% endif %}
 
+                        {% if form.assigned_staff %}
+                        <div class="mb-3">
+                            {{ form.assigned_staff.label(class="form-label") }}
+                            {{ form.assigned_staff(class="form-select") }}
+                            {% for error in form.assigned_staff.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                         {% if is_staff_or_admin and (system_canned_responses or personal_canned_responses) %}
                         <div class="mb-3">
                             <label for="canned-response-select" class="form-label">Use Canned Response (Optional)</label>
@@ -150,6 +183,13 @@
                             {# Idinagdag ang id="response-body-textarea" para sa JavaScript #}
                             {{ form.body(class="form-control", rows="5", id="response-body-textarea") }} 
                         </div>
+						{% if form.is_internal %}
+						<div class="mb-3 form-check">
+							{{ form.is_internal(class="form-check-input") }}
+							{{ form.is_internal.label(class="form-check-label") }}
+						</div>
+						{% endif %}
+                    
 
                         <div class="mb-3">
                             {{ form.attachment.label(class="form-label") }}

@@ -2,11 +2,11 @@
 
 {% block content %}
 <div class="container my-4">
-    <h2 class="mb-4">{{ title }}</h2>
+    <h2 class="mb-4">{{ title }}</h2> {# Ito 'yung dynamic title mula sa app.py #}
 
     <div id="newTicketAlert" class="alert alert-info alert-dismissible fade show" role="alert" style="display: none;">
         <i class="bi bi-info-circle-fill me-2"></i> New tickets have arrived!
-        <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=selected_quarter, search=search_query) }}" class="alert-link">Refresh the page</a> to see them.
+        <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}" class="alert-link">Refresh the page</a> to see them.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
@@ -44,7 +44,32 @@
          {% endif %}
     </form>
 
-
+    <div class="mb-3">
+        <ul class="nav nav-pills">
+            {% if current_user.role == 'Admin' %}
+                <li class="nav-item">
+                    <a class="nav-link {% if filter_view == 'all_system' %}active{% endif %}" 
+                       href="{{ url_for('staff_dashboard', filter_view='all_system', search=search_query, year=selected_year, quarter=selected_quarter) }}">
+                       <i class="bi bi-globe me-1"></i> All System Tickets
+                    </a>
+                </li>
+            {% else %}
+                <li class="nav-item">
+                    <a class="nav-link {% if filter_view == 'all_managed' %}active{% endif %}" 
+                       href="{{ url_for('staff_dashboard', filter_view='all_managed', search=search_query, year=selected_year, quarter=selected_quarter) }}">
+                       <i class="bi bi-grid-fill me-1"></i> My Managed Services
+                    </a>
+                </li>
+            {% endif %}
+            
+            <li class="nav-item">
+                <a class="nav-link {% if filter_view == 'my_assigned' %}active{% endif %}" 
+                   href="{{ url_for('staff_dashboard', filter_view='my_assigned', search=search_query, year=selected_year, quarter=selected_quarter) }}">
+                   <i class="bi bi-person-fill me-1"></i> My Assigned Tickets
+                </a>
+            </li>
+        </ul>
+    </div>
     <ul class="nav nav-tabs mb-3" id="dashboardTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tickets-tab" data-bs-toggle="tab" data-bs-target="#tickets-tab-pane" type="button" role="tab" aria-controls="tickets-tab-pane" aria-selected="true">
@@ -77,6 +102,7 @@
                             <tr>
                                 <th>#</th>
                                 <th>Status</th>
+                                <th>Assigned To</th>
                                 <th>Requester</th>
                                 <th>School/Office</th>
                                 <th>Service</th>
@@ -86,13 +112,20 @@
                         </thead>
                         <tbody>
                             {% for ticket in active_tickets.items %}
-                            <tr id="ticket-{{ ticket.id }}" data-timestamp="{{ ticket.date_posted.isoformat() }}Z"> {# ID and Timestamp added, ensuring 'Z' for UTC #}
+                            <tr id="ticket-{{ ticket.id }}" data-timestamp="{{ ticket.date_posted.isoformat() }}Z">
                                 <td>{{ ticket.ticket_number }}</td>
                                 <td>
                                     {% if ticket.status == 'Open' %}
                                     <span class="badge bg-success">{{ ticket.status }}</span>
                                     {% elif ticket.status == 'In Progress' %}
                                     <span class="badge bg-warning text-dark">{{ ticket.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if ticket.assigned_staff %}
+                                        <span class="badge bg-info text-dark" title="{{ ticket.assigned_staff.name }}">{{ ticket.assigned_staff.name.split() | map('first') | join('.') }}.</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Unassigned</span>
                                     {% endif %}
                                 </td>
                                 <td>{{ ticket.requester_name }}</td>
@@ -109,10 +142,10 @@
                 </div>
                 {% if active_tickets.pages > 1 %}
                  <nav aria-label="Active Tickets Pagination">
-                     <ul class="pagination pagination-sm justify-content-center">
-                         {# Assume you have a _pagination.html template or paste the pagination logic here #}
-                         {% include '_pagination.html' with context %}
-                     </ul>
+                      <ul class="pagination pagination-sm justify-content-center">
+                           {# Assume you have a _pagination.html template or paste the pagination logic here #}
+                           {% include '_pagination.html' with context %}
+                      </ul>
                  </nav>
                  {% endif %}
             {% else %}
@@ -131,6 +164,7 @@
                              <tr>
                                 <th>#</th>
                                 <th>Status</th>
+                                <th>Assigned To</th>
                                 <th>Requester</th>
                                 <th>School/Office</th>
                                 <th>Service</th>
@@ -143,6 +177,13 @@
                             <tr>
                                 <td>{{ ticket.ticket_number }}</td>
                                 <td><span class="badge bg-primary">{{ ticket.status }}</span></td>
+                                <td>
+                                    {% if ticket.assigned_staff %}
+                                        <span class="badge bg-info text-dark" title="{{ ticket.assigned_staff.name }}">{{ ticket.assigned_staff.name.split() | map('first') | join('.') }}.</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Unassigned</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ ticket.requester_name }}</td>
                                 <td>{{ ticket.school.name if ticket.school else 'N/A' }}</td>
                                 <td>{{ ticket.service_type.name }}</td>
@@ -157,19 +198,21 @@
                 </div>
                 {% if resolved_tickets.pages > 1 %}
                  <nav aria-label="Resolved Tickets Pagination">
-                     <ul class="pagination pagination-sm justify-content-center">
-                        {# Assume you have a _pagination.html template or paste the pagination logic here #}
-                        {% include '_pagination.html' with context %}
-                     </ul>
+                      <ul class="pagination pagination-sm justify-content-center">
+                           {# Assume you have a _pagination.html template or paste the pagination logic here #}
+                           {% include '_pagination.html' with context %}
+                      </ul>
                  </nav>
                  {% endif %}
             {% else %}
                  <div class="alert alert-light" role="alert">
-                     No resolved tickets found matching your criteria.
-                </div>
+                      No resolved tickets found matching your criteria.
+                 </div>
             {% endif %}
 
-        </div><div class="tab-pane fade" id="dept-summary-tab-pane" role="tabpanel" aria-labelledby="dept-summary-tab" tabindex="0">
+        </div>
+        
+        <div class="tab-pane fade" id="dept-summary-tab-pane" role="tabpanel" aria-labelledby="dept-summary-tab" tabindex="0">
             {% if not search_query %}
                 {% if dashboard_summary %}
                     <h4>Ticket Summary by Department ({{ selected_year }}{% if selected_quarter != 0 %} - Q{{ selected_quarter }}{% endif %})</h4>
@@ -218,10 +261,12 @@
                 {% else %}
                      <div class="alert alert-light" role="alert">
                          No ticket summary data available for the selected period.
-                    </div>
+                     </div>
                 {% endif %}
             {% endif %} 
-        </div><div class="tab-pane fade" id="school-summary-tab-pane" role="tabpanel" aria-labelledby="school-summary-tab" tabindex="0">
+        </div>
+        
+        <div class="tab-pane fade" id="school-summary-tab-pane" role="tabpanel" aria-labelledby="school-summary-tab" tabindex="0">
              {% if not search_query %}
                 {% if school_summary %}
                     <h4>Ticket Summary by School/Office ({{ selected_year }}{% if selected_quarter != 0 %} - Q{{ selected_quarter }}{% endif %})</h4>
@@ -252,11 +297,15 @@
                     </div>
                 {% else %}
                     <div class="alert alert-light" role="alert">
-                         No ticket summary data available for schools in the selected period.
+                        No ticket summary data available for schools in the selected period.
                     </div>
                 {% endif %}
              {% endif %}
-        </div></div></div> {% endblock content %}
+        </div>
+        
+    </div>
+</div>
+{% endblock content %}
 
 
 {% block scripts %}
@@ -287,7 +336,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // console.log("Initial lastKnownTimestamp:", lastKnownTimestamp); 
 
     function checkForNewTickets() {
-        const url = `/check-new-tickets?since=${encodeURIComponent(lastKnownTimestamp)}`;
+        // --- BAGONG DAGDAG: Isama ang filter_view sa polling URL ---
+        const currentFilterView = "{{ filter_view }}"; // Kunin mula sa Jinja
+        const url = `/check-new-tickets?since=${encodeURIComponent(lastKnownTimestamp)}&filter_view=${currentFilterView}`;
         
         fetch(url)
             .then(response => {
