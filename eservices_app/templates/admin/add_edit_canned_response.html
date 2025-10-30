@@ -6,8 +6,9 @@
             <div class="card shadow-sm">
                  <div class="card-header d-flex justify-content-between align-items-center">
                     <h4 class="mb-0">{{ title }}</h4>
-                    <a href="{{ url_for('manage_canned_responses') }}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-arrow-left"></i> Back to Canned Responses List
+                    
+                    <a href="{{ url_for('admin.manage_canned_responses') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i> Back to Canned Responses List
                     </a>
                 </div>
                 <div class="card-body">
@@ -86,29 +87,42 @@
     </div>
 </div>
 
-{# --- SIMULA NG JAVASCRIPT PARA SA DYNAMIC DROPDOWN --- #}
+{# --- SIMULA NG JAVASCRIPT --- #}
+{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const departmentSelect = document.getElementById('department-select');
     const serviceSelect = document.getElementById('service-select');
     // Kunin ang initial value ng service_id kung nag-eedit
     const initialServiceId = "{{ form.service_id.data if form.service_id.data is not none else '0' }}"; 
+    
+    // === BINAGO KO ITO ===
+    // Gumawa ng base URL para sa fetch gamit ang url_for
+    const serviceFetchUrlBase = "{{ url_for('admin._get_services_for_department', dept_id=0) }}".slice(0, -1); // Alisin ang '0' sa dulo
+    // === HANGGANG DITO ===
 
     function updateServiceOptions(departmentId, selectedServiceId = '0') {
-        // Clear existing service options except the default '-- General --'
-        serviceSelect.innerHTML = '<option value="0">-- General (All Services) --</option>'; 
+        // Clear existing service options
+        serviceSelect.innerHTML = ''; // I-clear lahat muna
         
         if (departmentId && departmentId !== '0') {
-            // Fetch services for the selected department
-            fetch(`/admin/_get_services_for_department/${departmentId}`)
+            serviceSelect.disabled = true; // Disable habang naglo-load
+            
+            // === BINAGO KO ITO ===
+            // Gamitin ang ginawang base URL
+            const fetchUrl = `${serviceFetchUrlBase}${departmentId}`;
+            // === HANGGANG DITO ===
+            
+            fetch(fetchUrl)
                 .then(response => response.json())
                 .then(services => {
+                    // services ay array na ngayon na may {id: 0, name: '-- General --'}
                     if (services.length > 0) {
                         services.forEach(service => {
                             const option = document.createElement('option');
                             option.value = service.id;
                             option.textContent = service.name;
-                             // Markahan kung ito ang initial selected value habang nag-eedit
+                             // Markahan kung ito ang initial selected value
                             if (service.id.toString() === selectedServiceId) {
                                 option.selected = true;
                             }
@@ -116,15 +130,27 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                         serviceSelect.disabled = false; // Enable ulit
                     } else {
-                         serviceSelect.disabled = true; // Disable kung walang services
+                         // Kahit walang services, dapat may '-- General --'
+                         const option = document.createElement('option');
+                         option.value = '0';
+                         option.textContent = '-- General (All Services) --';
+                         serviceSelect.appendChild(option);
+                         serviceSelect.disabled = false;
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching services:', error);
+                    // Maglagay pa rin ng default option kung mag-error
+                    const option = document.createElement('option');
+                    option.value = '0';
+                    option.textContent = '-- Error Loading Services --';
+                    serviceSelect.appendChild(option);
                     serviceSelect.disabled = true; // Disable on error
                 });
         } else {
-            serviceSelect.disabled = true; // Disable kung walang department na pinili
+            // Kung ang pinili ay '-- Select Department --'
+            serviceSelect.innerHTML = '<option value="0">-- General (All Services) --</option>';
+            serviceSelect.disabled = true; // Disable
             serviceSelect.value = '0'; // Ibalik sa default
         }
     }
@@ -133,17 +159,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (departmentSelect.value && departmentSelect.value !== '0') {
          updateServiceOptions(departmentSelect.value, initialServiceId);
     } else {
-        serviceSelect.disabled = true; // Disable service dropdown initially if no department selected
+        serviceSelect.disabled = true; // Disable service dropdown initially
     }
 
 
     // Event listener kapag nagbago ang pinili sa Department
     departmentSelect.addEventListener('change', function() {
         const selectedDepartmentId = this.value;
-        updateServiceOptions(selectedDepartmentId); // Walang specific service ID kapag nagbago
+        updateServiceOptions(selectedDepartmentId); // Walang specific service ID
     });
 });
 </script>
+{% endblock scripts %}
 {# --- TAPOS NG JAVASCRIPT --- #}
 
 {% endblock content %}

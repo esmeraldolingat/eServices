@@ -11,7 +11,7 @@
     <div class="row g-4 justify-content-center">
         {% for dept in departments %}
         <div class="col-md-6 col-lg-4">
-            <a href="{{ url_for('select_service', department_id=dept.id) }}" class="text-decoration-none text-dark">
+            <a href="{{ url_for('tickets.select_service', department_id=dept.id) }}" class="text-decoration-none text-dark">
                 <div class="card h-100 shadow-sm text-center p-4 border-0 rounded-4 card-hover">
                     <div class="card-body">
                         

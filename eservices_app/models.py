@@ -6,9 +6,8 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+from . import db
 
-# Initialize the database object here, without the app
-db = SQLAlchemy()
 
 # Association Table for User <-> Service many-to-many relationship
 user_service_association = db.Table('user_service',
@@ -115,10 +114,8 @@ class Ticket(db.Model):
     department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=False)
     service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     school_id = db.Column(db.Integer, db.ForeignKey('school.id'), nullable=True)
-    
     attachments = db.relationship('Attachment', backref='ticket', lazy=True, cascade="all, delete-orphan")
     responses = db.relationship('Response', backref='ticket', lazy=True, cascade="all, delete-orphan")
-
 
     # Ito ang column sa database na maglalaman ng ID ng naka-assign na staff
     assigned_staff_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='SET NULL'), nullable=True)

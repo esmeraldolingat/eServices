@@ -10,8 +10,9 @@
     <div class="row g-4 justify-content-center">
         {% for service in services %}
         <div class="col-md-6 col-lg-4">
-            <a href="{{ url_for('create_ticket_form', service_id=service.id) }}" class="text-decoration-none text-dark">
-                <div class="card h-100 shadow-sm text-center p-4 border-0 rounded-4 card-hover">
+            
+            <a href="{{ url_for('tickets.create_ticket_form', service_id=service.id) }}" class="text-decoration-none text-dark">
+            <div class="card h-100 shadow-sm text-center p-4 border-0 rounded-4 card-hover">
                     <div class="card-body d-flex flex-column justify-content-center">
                         
                         <i class="
@@ -91,8 +92,9 @@
     </div>
 
     <div class="text-center mt-5">
-        <a href="{{ url_for('select_department') }}" class="btn btn-outline-secondary">← Back to Departments</a>
-    </div>
+        
+        <a href="{{ url_for('tickets.select_department') }}" class="btn btn-outline-secondary">← Back to Departments</a>
+        </div>
 </div>
 
 <style>

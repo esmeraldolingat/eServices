@@ -6,15 +6,15 @@
              <h2 class="mb-0">{{ title }}</h2>
             {# Back button - Babalik sa ticket kung galing doon, kundi sa dashboard #}
             {% if ticket_id %}
-                <a href="{{ url_for('ticket_detail', ticket_id=ticket_id) }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Ticket #{{ ticket_id }}</a>
-            {% else %}
-                <a href="{{ url_for('staff_dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+                
+                <a href="{{ url_for('tickets.ticket_detail', ticket_id=ticket_id) }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Ticket #{{ ticket_id }}</a>
+                {% else %}
+                <a href="{{ url_for('admin.staff_dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
             {% endif %}
         </div>
     </div>
 
     <div class="row">
-        <!-- Left Column: List of existing responses -->
         <div class="col-md-7">
             <h4 class="mb-3">Saved Responses</h4>
             {% if my_responses %}
@@ -24,11 +24,9 @@
                         <div class="d-flex w-100 justify-content-between">
                             <h5 class="mb-1">{{ response.title }}</h5>
                             <div class="btn-group btn-group-sm" role="group">
-                                <!-- Edit Button -->
-                                <a href="{{ url_for('edit_my_response', response_id=response.id, ticket_id=ticket_id) }}" class="btn btn-outline-primary"><i class="bi bi-pencil-fill"></i> Edit</a>
-                                <!-- Delete Button Form -->
-                                <form action="{{ url_for('delete_my_response', response_id=response.id, ticket_id=ticket_id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this response?');" style="display: inline;">
-                                    <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+                                <a href="{{ url_for('admin.edit_my_response', response_id=response.id, ticket_id=ticket_id) }}" class="btn btn-outline-primary"><i class="bi bi-pencil-fill"></i> Edit</a>
+                                <form action="{{ url_for('admin.delete_my_response', response_id=response.id, ticket_id=ticket_id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this response?');" style="display: inline;">
+                                <button type="submit" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
                                 </form>
                             </div>
                         </div>
@@ -43,15 +41,15 @@
             {% endif %}
         </div>
 
-        <!-- Right Column: Add new response form -->
         <div class="col-md-5">
             <div class="card sticky-top" style="top: 20px;">
                 <div class="card-header">
                     <h5 class="mb-0">Add New Personal Response</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="">
-                        {{ form.hidden_tag() }}
+                    
+                    <form method="POST" action="{{ url_for('admin.manage_my_responses', ticket_id=ticket_id) }}">
+                    {{ form.hidden_tag() }}
                         
                         <div class="mb-3">
                             {{ form.title.label(class="form-label") }}
@@ -91,4 +89,3 @@
     </div>
 </div>
 {% endblock content %}
-

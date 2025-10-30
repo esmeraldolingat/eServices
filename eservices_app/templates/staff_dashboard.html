@@ -6,12 +6,13 @@
 
     <div id="newTicketAlert" class="alert alert-info alert-dismissible fade show" role="alert" style="display: none;">
         <i class="bi bi-info-circle-fill me-2"></i> New tickets have arrived!
-        <a href="{{ url_for('staff_dashboard', year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}" class="alert-link">Refresh the page</a> to see them.
+        
+        <a href="{{ url_for('admin.staff_dashboard', year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}" class="alert-link">Refresh the page</a> to see them.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
-    <form method="GET" action="{{ url_for('staff_dashboard') }}" class="row g-3 mb-4 align-items-end bg-light p-3 rounded border">
-        <div class="col-md-3">
+    <form method="GET" action="{{ url_for('admin.staff_dashboard') }}" class="row g-3 mb-4 align-items-end bg-light p-3 rounded border">
+    <div class="col-md-3">
             <label for="search" class="form-label">Search (Ticket #, Name, School)</label>
             <input type="text" class="form-control" id="search" name="search" value="{{ search_query or '' }}" placeholder="Enter keyword...">
         </div>
@@ -35,12 +36,14 @@
         </div>
         <div class="col-md-3 d-flex align-items-end">
             <button type="submit" class="btn btn-primary me-2"><i class="bi bi-filter"></i> Filter / Search</button>
-            <a href="{{ url_for('staff_dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Reset</a>
-        </div>
+            
+            <a href="{{ url_for('admin.staff_dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Reset</a>
+            </div>
          {% if current_user.role == 'Admin' %}
          <div class="col-md-2 d-flex justify-content-end align-items-end">
-             <a href="{{ url_for('export_tickets', search=search_query, year=selected_year, quarter=selected_quarter) }}" class="btn btn-success"><i class="bi bi-download me-1"></i> Export CSV</a>
-         </div>
+             
+             <a href="{{ url_for('admin.export_tickets', search=search_query, year=selected_year, quarter=selected_quarter) }}" class="btn btn-success"><i class="bi bi-download me-1"></i> Export CSV</a>
+             </div>
          {% endif %}
     </form>
 
@@ -48,26 +51,29 @@
         <ul class="nav nav-pills">
             {% if current_user.role == 'Admin' %}
                 <li class="nav-item">
+                    
                     <a class="nav-link {% if filter_view == 'all_system' %}active{% endif %}" 
-                       href="{{ url_for('staff_dashboard', filter_view='all_system', search=search_query, year=selected_year, quarter=selected_quarter) }}">
+                       href="{{ url_for('admin.staff_dashboard', filter_view='all_system', search=search_query, year=selected_year, quarter=selected_quarter) }}">
                        <i class="bi bi-globe me-1"></i> All System Tickets
                     </a>
-                </li>
+                    </li>
             {% else %}
                 <li class="nav-item">
+                    
                     <a class="nav-link {% if filter_view == 'all_managed' %}active{% endif %}" 
-                       href="{{ url_for('staff_dashboard', filter_view='all_managed', search=search_query, year=selected_year, quarter=selected_quarter) }}">
+                       href="{{ url_for('admin.staff_dashboard', filter_view='all_managed', search=search_query, year=selected_year, quarter=selected_quarter) }}">
                        <i class="bi bi-grid-fill me-1"></i> My Managed Services
                     </a>
-                </li>
+                    </li>
             {% endif %}
             
             <li class="nav-item">
+                
                 <a class="nav-link {% if filter_view == 'my_assigned' %}active{% endif %}" 
-                   href="{{ url_for('staff_dashboard', filter_view='my_assigned', search=search_query, year=selected_year, quarter=selected_quarter) }}">
+                   href="{{ url_for('admin.staff_dashboard', filter_view='my_assigned', search=search_query, year=selected_year, quarter=selected_quarter) }}">
                    <i class="bi bi-person-fill me-1"></i> My Assigned Tickets
                 </a>
-            </li>
+                </li>
         </ul>
     </div>
     <ul class="nav nav-tabs mb-3" id="dashboardTab" role="tablist">
@@ -133,8 +139,9 @@
                                 <td>{{ ticket.service_type.name }}</td>
                                 <td>{{ ticket.date_posted.strftime('%Y-%m-%d %I:%M%p') }}</td>
                                 <td>
-                                    <a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}" class="btn btn-sm btn-outline-primary">View</a>
-                                </td>
+                                    
+                                    <a href="{{ url_for('tickets.ticket_detail', ticket_id=ticket.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                                    </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -142,10 +149,10 @@
                 </div>
                 {% if active_tickets.pages > 1 %}
                  <nav aria-label="Active Tickets Pagination">
-                      <ul class="pagination pagination-sm justify-content-center">
-                           {# Assume you have a _pagination.html template or paste the pagination logic here #}
-                           {% include '_pagination.html' with context %}
-                      </ul>
+                        <ul class="pagination pagination-sm justify-content-center">
+                            {# Assume you have a _pagination.html template or paste the pagination logic here #}
+                            {% include '_pagination.html' with context %}
+                        </ul>
                  </nav>
                  {% endif %}
             {% else %}
@@ -189,8 +196,9 @@
                                 <td>{{ ticket.service_type.name }}</td>
                                 <td>{{ ticket.date_posted.strftime('%Y-%m-%d %I:%M%p') }}</td>
                                 <td>
-                                    <a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
-                                </td>
+                                    
+                                    <a href="{{ url_for('tickets.ticket_detail', ticket_id=ticket.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
+                                    </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -198,10 +206,10 @@
                 </div>
                 {% if resolved_tickets.pages > 1 %}
                  <nav aria-label="Resolved Tickets Pagination">
-                      <ul class="pagination pagination-sm justify-content-center">
-                           {# Assume you have a _pagination.html template or paste the pagination logic here #}
-                           {% include '_pagination.html' with context %}
-                      </ul>
+                        <ul class="pagination pagination-sm justify-content-center">
+                            {# Assume you have a _pagination.html template or paste the pagination logic here #}
+                            {% include '_pagination.html' with context %}
+                        </ul>
                  </nav>
                  {% endif %}
             {% else %}
@@ -280,16 +288,16 @@
                                      </h5>
                                  </div>
                                  <ul class="list-group list-group-flush">
-                                     {% for service_info in school_data.services %}
-                                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                                         <span>{{ service_info.name }}</span>
-                                         <div>
-                                             <span class="badge rounded-pill bg-success me-1" title="Active">{{ service_info.active }}</span>
-                                             <span class="badge rounded-pill bg-primary me-1" title="Resolved">{{ service_info.resolved }}</span>
-                                             <span class="badge rounded-pill bg-secondary" title="Total">{{ service_info.total }}</span>
-                                         </div>
-                                     </li>
-                                     {% endfor %}
+                                      {% for service_info in school_data.services %}
+                                      <li class="list-group-item d-flex justify-content-between align-items-center">
+                                          <span>{{ service_info.name }}</span>
+                                          <div>
+                                              <span class="badge rounded-pill bg-success me-1" title="Active">{{ service_info.active }}</span>
+                                              <span class="badge rounded-pill bg-primary me-1" title="Resolved">{{ service_info.resolved }}</span>
+                                              <span class="badge rounded-pill bg-secondary" title="Total">{{ service_info.total }}</span>
+                                          </div>
+                                      </li>
+                                      {% endfor %}
                                  </ul>
                              </div>
                          </div>
@@ -315,6 +323,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const POLLING_INTERVAL = 30000; // Check every 30 seconds
     let lastKnownTimestamp = new Date(0).toISOString(); // Initialize to earliest UTC
 
+    // === BINAGO KO ITO (JavaScript URL) ===
+    // Ipasa ang URL mula sa Jinja papunta sa JavaScript
+    const checkTicketsUrl = "{{ url_for('admin.check_new_tickets') }}";
+    // === HANGGANG DITO ===
+
     const ticketRows = document.querySelectorAll('#tickets-tab-pane tbody tr[data-timestamp]');
     if (ticketRows.length > 0) {
         const timestamps = Array.from(ticketRows).map(row => {
@@ -327,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         const validDates = timestamps.filter(date => !isNaN(date));
         if(validDates.length > 0) {
-            const maxDate = new Date(Math.max.apply(null, validDates));
+             const maxDate = new Date(Math.max.apply(null, validDates));
              if (!isNaN(maxDate)) {
                  lastKnownTimestamp = maxDate.toISOString();
              }
@@ -338,7 +351,11 @@ document.addEventListener('DOMContentLoaded', function() {
     function checkForNewTickets() {
         // --- BAGONG DAGDAG: Isama ang filter_view sa polling URL ---
         const currentFilterView = "{{ filter_view }}"; // Kunin mula sa Jinja
-        const url = `/check-new-tickets?since=${encodeURIComponent(lastKnownTimestamp)}&filter_view=${currentFilterView}`;
+        
+        // === BINAGO KO ITO (JavaScript URL) ===
+        // Gamitin ang URL na ginawa natin sa taas
+        const url = `${checkTicketsUrl}?since=${encodeURIComponent(lastKnownTimestamp)}&filter_view=${currentFilterView}`;
+        // === HANGGANG DITO ===
         
         fetch(url)
             .then(response => {
