@@ -1,7 +1,7 @@
 # eservices_app/__init__.py
 
 import os
-from flask import Flask, render_template, request # Idinagdag ang request para sa error handlers
+from flask import Flask, render_template, request 
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user

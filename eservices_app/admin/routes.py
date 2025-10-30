@@ -2,7 +2,7 @@
 
 # --- Standard Flask & SQLAlchemy Imports ---
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, flash, current_app, jsonify, Response) # Added Response for export
+                   url_for, flash, current_app, jsonify, Response)
 from flask_login import login_required, current_user
 from sqlalchemy import func, case, extract, or_, text
 from sqlalchemy.orm import joinedload
@@ -24,6 +24,11 @@ from ..decorators import admin_required, staff_or_admin_required # Import decora
 # --- Create Blueprint ---
 admin_bp = Blueprint('admin', __name__, template_folder='templates', url_prefix='/admin')
 
+
+
+
+
+
 # === STAFF/ADMIN DASHBOARD ===
 
 @admin_bp.route('/staff-dashboard')
@@ -38,12 +43,18 @@ def staff_dashboard():
     # --- Request Arguments ---
     page_active = request.args.get('page_active', 1, type=int)
     page_resolved = request.args.get('page_resolved', 1, type=int)
-    page_school = request.args.get('page_school', 1, type=int) # <-- IDINAGDAG ITO
+    page_school = request.args.get('page_school', 1, type=int)
     search_query = request.args.get('search', '').strip()
     default_view = 'all_managed' if current_user.role == 'Staff' else 'all_system'
     filter_view = request.args.get('filter_view', default_view)
     selected_year = request.args.get('year', datetime.utcnow().year, type=int)
     selected_quarter = request.args.get('quarter', 0, type=int)
+
+    # === ITO ANG BAGONG LOGIC PARA SA ACTIVE TAB ===
+    # Babasahin natin ang 'tab' parameter galing sa URL.
+    # Kung walang 'tab' parameter, default ay 'tickets'.
+    active_tab = request.args.get('tab', 'tickets')
+    # === TAPOS NG LOGIC ===
 
     # --- Year/Quarter Setup ---
     available_years_query = db.session.query(extract('year', Ticket.date_posted)).distinct().order_by(extract('year', Ticket.date_posted).desc())
@@ -70,13 +81,15 @@ def staff_dashboard():
             current_app.logger.warning(f"Staff user {current_user.email} has no services.")
             # Render empty dashboard gracefully
             empty_paginate = db.paginate(db.select(Ticket).where(db.false()), page=1, per_page=current_app.config['TICKETS_PER_PAGE'], error_out=False)
+            
             return render_template('staff_dashboard.html', 
-                                 active_tickets=empty_paginate, resolved_tickets=empty_paginate, 
-                                 dashboard_summary={}, school_summary={}, 
-                                 paginated_schools=empty_paginate, # <-- IDINAGDAG ITO
-                                 title="My Managed Tickets", available_years=available_years, 
-                                 selected_year=selected_year, selected_quarter=selected_quarter, 
-                                 search_query=search_query, filter_view=filter_view)
+                                   active_tickets=empty_paginate, resolved_tickets=empty_paginate, 
+                                   dashboard_summary={}, school_summary={}, 
+                                   paginated_schools=empty_paginate,
+                                   title="My Managed Tickets", available_years=available_years, 
+                                   selected_year=selected_year, selected_quarter=selected_quarter, 
+                                   search_query=search_query, filter_view=filter_view,
+                                   active_tab=active_tab) # <-- Idinagdag na rin dito
 
         ticket_base_query = ticket_base_query.filter(Ticket.service_id.in_(managed_service_ids))
         if filter_view == 'my_assigned':
@@ -113,12 +126,12 @@ def staff_dashboard():
     dashboard_summary = {}
     school_summary = {}
     
-    # --- SIMULA NG PAGBABAGO SA SCHOOL SUMMARY ---
     # Gawing 'empty_paginate' muna para sigurado
     paginated_schools = db.paginate(db.select(School).where(db.false()), page=1, per_page=10, error_out=False)
 
     if not search_query:
         # === Department Summary ===
+        # (Walang binago dito)
         dept_summary_query = db.session.query(
             Department.name.label('dept_name'),
             Service.name.label('service_name'),
@@ -126,8 +139,6 @@ def staff_dashboard():
             func.count(Ticket.id).label('total'),
             func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
         ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(Department, Service.department_id == Department.id)
-
-        # Apply common filters
         dept_summary_query = dept_summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
@@ -137,8 +148,6 @@ def staff_dashboard():
         if filter_view == 'my_assigned':
             dept_summary_query = dept_summary_query.filter(Ticket.assigned_staff_id == current_user.id)
         dept_summary_data = dept_summary_query.group_by(Department.name, Service.name, Service.id).all()
-
-        # Process Department Summary Data
         if current_user.role == 'Admin':
             all_departments = Department.query.options(db.joinedload(Department.services)).order_by(Department.name).all()
         else: # Staff
@@ -159,39 +168,29 @@ def staff_dashboard():
             if dept_services_data:
                 dashboard_summary[dept.name] = {'services': dept_services_data,'department_total': department_total_tickets,'service_count': len(dept_services_data)}
 
-        # === School Summary (Bagong Logic na may Pagination) ===
+        # === School Summary ===
+        # (Ito 'yung code na gumagana galing sa dati nating ayos)
         
-        # Step A: Kunin ang paginated list ng mga School objects na may tickets
-        # !!!!! ITO ANG INAYOS NA QUERY !!!!!
-        school_name_query = db.session.query(School, func.count(Ticket.id).label('total_tickets')) \
-            .select_from(Ticket).join(School, Ticket.school_id == School.id) \
-            .join(Service, Ticket.service_id == Service.id) # Kailangan i-join para sa filters
+        school_name_query = db.session.query(School). \
+            select_from(Ticket).join(School, Ticket.school_id == School.id). \
+            join(Service, Ticket.service_id == Service.id)
 
-        # Ilagay ang common filters (Year, Quarter)
         school_name_query = school_name_query.filter(extract('year', Ticket.date_posted) == selected_year)
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
             school_name_query = school_name_query.filter(Ticket.date_posted.between(start_date, end_date))
         
-        # Ilagay ang role filters (managed_service_ids, my_assigned)
         if managed_service_ids is not None:
             school_name_query = school_name_query.filter(Service.id.in_(managed_service_ids))
         if filter_view == 'my_assigned':
             school_name_query = school_name_query.filter(Ticket.assigned_staff_id == current_user.id)
             
-        # Group by school object at i-order base sa dami ng tickets (DESC)
-        school_name_query = school_name_query.group_by(School.id).order_by(db.text('total_tickets DESC'), School.name)
+        school_name_query = school_name_query.group_by(School.id).order_by(func.count(Ticket.id).desc(), School.name)
         
-        # I-paginate ang query (10 schools bawat page)
         paginated_schools = db.paginate(school_name_query, page=page_school, per_page=10, error_out=False)
         
-        # Kunin ang listahan ng school names para sa page na ito *lamang*
-        # !!!!! ITO ANG INAYOS NA LIST COMPREHENSION !!!!!
-        # Ang 'item' ay isa na ngayong Row object (na may keys 'School' at 'total_tickets')
-        # Kaya ang tamang pag-access ay item.School.name
         current_page_school_names = [item.name for item in paginated_schools.items]
 
-        # Step B: Kunin ang details para sa mga schools na nasa page na ito *lamang*
         if current_page_school_names:
             school_summary_details_query = db.session.query(
                 School.name.label('school_name'),
@@ -201,55 +200,57 @@ def staff_dashboard():
                 func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
             ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(School, Ticket.school_id == School.id)
 
-            # Ilagay ulit ang common filters
             school_summary_details_query = school_summary_details_query.filter(extract('year', Ticket.date_posted) == selected_year)
             if selected_quarter in quarters:
                 start_date, end_date = quarters[selected_quarter]
                 school_summary_details_query = school_summary_details_query.filter(Ticket.date_posted.between(start_date, end_date))
             
-            # Ilagay ulit ang role filters
             if managed_service_ids is not None:
                 school_summary_details_query = school_summary_details_query.filter(Service.id.in_(managed_service_ids))
             if filter_view == 'my_assigned':
                 school_summary_details_query = school_summary_details_query.filter(Ticket.assigned_staff_id == current_user.id)
             
-            # Filter para sa schools na nasa page na ito *lamang*
             school_summary_details_query = school_summary_details_query.filter(School.name.in_(current_page_school_names))
             
             school_summary_data_flat = school_summary_details_query.group_by(School.name, Service.name, Service.id).order_by(School.name, Service.name).all()
 
-            # I-proseso ang data (pareho sa dati, pero mas mabilis na)
-            # !!!!! ITO ANG INAYOS NA BAHAGI !!!!!
-            # Gagamitin natin ang paginated_schools.items para makuha ang tamang total_tickets
-            for item in paginated_schools.items:
-                school_obj = item
-                total_count = school_summary.get(item.name, {}).get('total_school_tickets', 0)
-                school_summary[school_obj.name] = {'total_school_tickets': total_count, 'services': []}
+            for school_obj in paginated_schools.items:
+                school_summary[school_obj.name] = {'total_school_tickets': 0, 'services': []}
 
             for row in school_summary_data_flat:
                 s_name = row.school_name
-                if s_name in school_summary: # Check kung baka wala (kahit dapat meron)
+                if s_name in school_summary: 
                     res, tot = row.resolved_count, row.total; act = tot - res
                     school_summary[s_name]['services'].append({'name': row.service_name, 'active': act, 'resolved': res, 'total': tot})
-                    # HINDI NA KAILANGAN ITO: school_summary[s_name]['total_school_tickets'] += tot (dahil nakuha na natin sa Step A)
-    
+                    school_summary[s_name]['total_school_tickets'] += tot
+        
     else: # Kung may search_query, i-define lang si paginated_schools as empty
          paginated_schools = db.paginate(db.select(School).where(db.false()), page=1, per_page=10, error_out=False)
     
-    # --- TAPOS NG PAGBABAGO ---
+ 
+    # === ITO NA ANG IISANG FINAL RETURN ===
+    return render_template(
+        'staff_dashboard.html', 
+        title=title, 
+        active_tickets=active_tickets,
+        resolved_tickets=resolved_tickets,
+        paginated_schools=paginated_schools,
+        school_summary=school_summary,
+        dashboard_summary=dashboard_summary,
+        available_years=available_years,
+        selected_year=selected_year,
+        selected_quarter=selected_quarter,
+        search_query=search_query,
+        filter_view=filter_view,
+        active_tab=active_tab  # <--- HETO NA SIYA
+    )
 
 
-    # --- Render Template ---
-    return render_template('staff_dashboard.html', # Assuming this is in eservices_app/templates/
-                           active_tickets=active_tickets, resolved_tickets=resolved_tickets,
-                           dashboard_summary=dashboard_summary, school_summary=school_summary,
-                           paginated_schools=paginated_schools, # <-- IPINASA ITO
-                           title=title, available_years=available_years,
-                           selected_year=selected_year, selected_quarter=selected_quarter,
-                           search_query=search_query, filter_view=filter_view)
+
+
+
 
 # === TICKET EXPORT (ADMIN) ===
-# ... (walang pagbabago mula dito pababa) ...
 
 @admin_bp.route('/export-tickets')
 @login_required

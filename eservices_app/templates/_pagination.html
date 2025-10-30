@@ -1,58 +1,56 @@
-{# _pagination.html #}
-{# Generic Pagination Macro - Expects a pagination object AND a tab_name #}
-{# Example usage: {% include '_pagination.html' with context pagination=paginated_schools tab_name='school-summary' %} #}
+{# ========================================== #}
+{#  templates/_pagination.html (ANG BAGONG CODE) #}
+{# ========================================== #}
 
-{# Remove these lines as 'pagination' will be passed directly #}
-{# {% set pagination = active_tickets if active_tickets else resolved_tickets %} #}
-{# {% set page_var = 'page_active' if active_tickets else 'page_resolved' %} #}
-{# {% set other_page_var = 'page_resolved' if active_tickets else 'page_active' %} #}
-{# {% set other_page_num = resolved_tickets.page if active_tickets else active_tickets.page %} #}
+{# Tumatanggap ng variables:
+   - current_pagination: Ang pagination object (e.g., active_tickets, summary_by_school)
+   - current_page_var: Ang pangalan ng URL variable (e.g., 'page_active', 'page_summary')
+   - other_page_vars: Isang dictionary ng iba pang page variables para i-preserve
+#}
 
-{# Determine page variable based on tab_name (adjust if needed) #}
-{% set page_var = 'page_' + tab_name.split('-')[0] %} {# e.g., page_school #}
+{% set pagination = current_pagination %}
+{% set page_var = current_page_var %}
+{% set other_vars = other_page_vars | default({}) %}
+{# Kunin ang lahat ng iba pang query parameters para ma-preserve #}
+{% set query_params = {
+    'search': request.args.get('search', search_query),
+    'year': request.args.get('year', selected_year),
+    'quarter': request.args.get('quarter', selected_quarter),
+    'filter_view': request.args.get('filter_view')
+} %}
+
 
 {% if pagination and pagination.pages > 1 %}
 <nav aria-label="Page navigation">
     <ul class="pagination pagination-sm justify-content-center">
 
-        {# Previous Page Link #}
+        {# --- Previous Page Link --- #}
         {% if pagination.has_prev %}
-            {# --- BINAGO KO ITO: Idagdag ang active_tab --- #}
-            {% set url_params = {
-                page_var: pagination.prev_num,
-                'search': search_query,
-                'year': selected_year,
-                'quarter': selected_quarter,
-                'filter_view': filter_view, 
-                'active_tab': tab_name  {# <-- Idinagdag ito #}
-            } %}
-            {# --- HANGGANG DITO --- #}
+            {# Buuin ang URL parameters #}
+            {% set url_params = query_params.copy() %}
+            {% do url_params.update(other_vars) %}
+            {% do url_params.update({page_var: pagination.prev_num}) %}
+            
             <li class="page-item">
-                {# Use request.endpoint if this is generic, or specify admin.staff_dashboard #}
-                <a class="page-link" href="{{ url_for('admin.staff_dashboard', **url_params) }}">Previous</a>
+                <a class="page-link" href="{{ url_for(request.endpoint, **url_params) }}">Previous</a>
             </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Previous</span></li>
         {% endif %}
 
-        {# Page Number Links #}
+        {# --- Page Number Links --- #}
         {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
             {% if page_num %}
                 {% if pagination.page == page_num %}
                     <li class="page-item active" aria-current="page"><span class="page-link">{{ page_num }}</span></li>
                 {% else %}
-                    {# --- BINAGO KO ITO: Idagdag ang active_tab --- #}
-                    {% set url_params = {
-                        page_var: page_num,
-                        'search': search_query,
-                        'year': selected_year,
-                        'quarter': selected_quarter,
-                        'filter_view': filter_view,
-                        'active_tab': tab_name  {# <-- Idinagdag ito #}
-                    } %}
-                    {# --- HANGGANG DITO --- #}
+                    {# Buuin ang URL parameters #}
+                    {% set url_params = query_params.copy() %}
+                    {% do url_params.update(other_vars) %}
+                    {% do url_params.update({page_var: page_num}) %}
+
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('admin.staff_dashboard', **url_params) }}">{{ page_num }}</a>
+                        <a class="page-link" href="{{ url_for(request.endpoint, **url_params) }}">{{ page_num }}</a>
                     </li>
                 {% endif %}
             {% else %}
@@ -60,20 +58,15 @@
             {% endif %}
         {% endfor %}
 
-        {# Next Page Link #}
+        {# --- Next Page Link --- #}
         {% if pagination.has_next %}
-             {# --- BINAGO KO ITO: Idagdag ang active_tab --- #}
-            {% set url_params = {
-                page_var: pagination.next_num,
-                'search': search_query,
-                'year': selected_year,
-                'quarter': selected_quarter,
-                'filter_view': filter_view,
-                'active_tab': tab_name  {# <-- Idinagdag ito #}
-            } %}
-            {# --- HANGGANG DITO --- #}
+            {# Buuin ang URL parameters #}
+            {% set url_params = query_params.copy() %}
+            {% do url_params.update(other_vars) %}
+            {% do url_params.update({page_var: pagination.next_num}) %}
+
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('admin.staff_dashboard', **url_params) }}">Next</a>
+                <a class="page-link" href="{{ url_for(request.endpoint, **url_params) }}">Next</a>
             </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Next</span></li>

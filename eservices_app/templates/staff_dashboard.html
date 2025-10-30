@@ -73,23 +73,25 @@
                    href="{{ url_for('admin.staff_dashboard', filter_view='my_assigned', search=search_query, year=selected_year, quarter=selected_quarter) }}">
                     <i class="bi bi-person-fill me-1"></i> My Assigned Tickets
                 </a>
-                </li>
+            </li>
         </ul>
     </div>
+
+    {# Ito 'yung galing sa routes.py na (active_tab) #}
     <ul class="nav nav-tabs mb-3" id="dashboardTab" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tickets-tab" data-bs-toggle="tab" data-bs-target="#tickets-tab-pane" type="button" role="tab" aria-controls="tickets-tab-pane" aria-selected="true">
+            <button class="nav-link {% if active_tab == 'tickets' %}active{% endif %}" id="tickets-tab" data-bs-toggle="tab" data-bs-target="#tickets-tab-pane" type="button" role="tab" aria-controls="tickets-tab-pane" aria-selected="{% if active_tab == 'tickets' %}true{% else %}false{% endif %}">
                 <i class="bi bi-ticket-detailed me-1"></i> Tickets
             </button>
         </li>
         {% if not search_query %} {# Itago ang summary tabs kapag nag-search #}
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="dept-summary-tab" data-bs-toggle="tab" data-bs-target="#dept-summary-tab-pane" type="button" role="tab" aria-controls="dept-summary-tab-pane" aria-selected="false">
+            <button class="nav-link {% if active_tab == 'dept' %}active{% endif %}" id="dept-summary-tab" data-bs-toggle="tab" data-bs-target="#dept-summary-tab-pane" type="button" role="tab" aria-controls="dept-summary-tab-pane" aria-selected="{% if active_tab == 'dept' %}true{% else %}false{% endif %}">
                 <i class="bi bi-building me-1"></i> Summary by Department
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="school-summary-tab" data-bs-toggle="tab" data-bs-target="#school-summary-tab-pane" type="button" role="tab" aria-controls="school-summary-tab-pane" aria-selected="false">
+            <button class="nav-link {% if active_tab == 'school' %}active{% endif %}" id="school-summary-tab" data-bs-toggle="tab" data-bs-target="#school-summary-tab-pane" type="button" role="tab" aria-controls="school-summary-tab-pane" aria-selected="{% if active_tab == 'school' %}true{% else %}false{% endif %}">
                 <i class="bi bi-bank2 me-1"></i> Summary by School
             </button>
         </li>
@@ -98,7 +100,7 @@
 
     <div class="tab-content" id="dashboardTabContent">
 
-        <div class="tab-pane fade show active" id="tickets-tab-pane" role="tabpanel" aria-labelledby="tickets-tab" tabindex="0">
+        <div class="tab-pane fade {% if active_tab == 'tickets' %}show active{% endif %}" id="tickets-tab-pane" role="tabpanel" aria-labelledby="tickets-tab" tabindex="0">
 
             <h4><i class="bi bi-play-circle-fill text-success me-2"></i>Active Tickets</h4>
             {% if active_tickets and active_tickets.items %}
@@ -148,32 +150,33 @@
                     </table>
                 </div>
                 
-                <!-- === SIMULA NG PAG-AYOS SA ACTIVE TICKETS PAGINATION === -->
+                {# ========================================================== #}
+                {# === SIMULA NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
+                {# ========================================================== #}
                 {% if active_tickets.pages > 1 %}
                  <nav aria-label="Active Tickets Pagination">
                     <ul class="pagination pagination-sm justify-content-center">
-                        <!-- Previous Page Link -->
                         <li class="page-item {% if not active_tickets.has_prev %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}">Previous</a>
+                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.prev_num, page_resolved=resolved_tickets.page, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view, tab='tickets') }}">Previous</a>
                         </li>
-                        <!-- Page Numbers -->
                         {% for page_num in active_tickets.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                             {% if page_num %}
                                 <li class="page-item {% if active_tickets.page == page_num %}active{% endif %}">
-                                    <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}">{{ page_num }}</a>
+                                    <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=page_num, page_resolved=resolved_tickets.page, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view, tab='tickets') }}">{{ page_num }}</a>
                                 </li>
                             {% else %}
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             {% endif %}
                         {% endfor %}
-                        <!-- Next Page Link -->
                         <li class="page-item {% if not active_tickets.has_next %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}">Next</a>
+                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.next_num, page_resolved=resolved_tickets.page, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view, tab='tickets') }}">Next</a>
                         </li>
                     </ul>
                  </nav>
                  {% endif %}
-                <!-- === TAPOS NG PAG-AYOS === -->
+                {# ======================================================== #}
+                {# === TAPOS NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
+                {# ======================================================== #}
                  
             {% else %}
                 <div class="alert alert-light" role="alert">
@@ -225,32 +228,33 @@
                     </table>
                 </div>
                 
-                <!-- === SIMULA NG PAG-AYOS SA RESOLVED TICKETS PAGINATION === -->
+                {# ========================================================== #}
+                {# === SIMULA NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
+                {# ========================================================== #}
                 {% if resolved_tickets.pages > 1 %}
                  <nav aria-label="Resolved Tickets Pagination">
                     <ul class="pagination pagination-sm justify-content-center">
-                        <!-- Previous Page Link -->
                         <li class="page-item {% if not resolved_tickets.has_prev %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.prev_num, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}">Previous</a>
+                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.prev_num, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view, tab='tickets') }}">Previous</a>
                         </li>
-                        <!-- Page Numbers -->
                         {% for page_num in resolved_tickets.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                             {% if page_num %}
                                 <li class="page-item {% if resolved_tickets.page == page_num %}active{% endif %}">
-                                    <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=page_num, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}">{{ page_num }}</a>
+                                    <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=page_num, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view, tab='tickets') }}">{{ page_num }}</a>
                                 </li>
                             {% else %}
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             {% endif %}
                         {% endfor %}
-                        <!-- Next Page Link -->
                         <li class="page-item {% if not resolved_tickets.has_next %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.next_num, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}">Next</a>
+                            <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.next_num, page_school=paginated_schools.page, year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view, tab='tickets') }}">Next</a>
                         </li>
                     </ul>
                  </nav>
                  {% endif %}
-                <!-- === TAPOS NG PAG-AYOS === -->
+                {# ======================================================== #}
+                {# === TAPOS NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
+                {# ======================================================== #}
                  
             {% else %}
                  <div class="alert alert-light" role="alert">
@@ -260,7 +264,7 @@
 
         </div>
         
-        <div class="tab-pane fade" id="dept-summary-tab-pane" role="tabpanel" aria-labelledby="dept-summary-tab" tabindex="0">
+        <div class="tab-pane fade {% if active_tab == 'dept' %}show active{% endif %}" id="dept-summary-tab-pane" role="tabpanel" aria-labelledby="dept-summary-tab" tabindex="0">
             {% if not search_query %}
                 {% if dashboard_summary %}
                     <h4>Ticket Summary by Department ({{ selected_year }}{% if selected_quarter != 0 %} - Q{{ selected_quarter }}{% endif %})</h4>
@@ -308,22 +312,20 @@
                     </div>
                 {% else %}
                      <div class="alert alert-light" role="alert">
-                         No ticket summary data available for the selected period.
+                          No ticket summary data available for the selected period.
                      </div>
                 {% endif %}
             {% endif %} 
         </div>
         
-        <div class="tab-pane fade" id="school-summary-tab-pane" role="tabpanel" aria-labelledby="school-summary-tab" tabindex="0">
+        <div class="tab-pane fade {% if active_tab == 'school' %}show active{% endif %}" id="school-summary-tab-pane" role="tabpanel" aria-labelledby="school-summary-tab" tabindex="0">
              {% if not search_query %}
-             
-                <!-- === SIMULA NG PAG-AYOS SA SCHOOL SUMMARY LOOP AT PAGINATION === -->
+            
                 {% if paginated_schools and paginated_schools.items %}
                     <h4>Ticket Summary by School/Office ({{ selected_year }}{% if selected_quarter != 0 %} - Q{{ selected_quarter }}{% endif %})</h4>
                     <p class="text-muted">Showing {{ paginated_schools.start_index }}–{{ paginated_schools.end_index }} of {{ paginated_schools.total }} schools (sorted by most tickets).</p>
                     
                     <div class="row g-4 mt-3">
-                        {# Pinalitan ang loop para gamitin ang 'paginated_schools' object #}
                         {% for school in paginated_schools.items %}
                          {% set school_name = school.name %}
                          {% set school_data = school_summary[school_name] %}
@@ -331,9 +333,9 @@
                              <div class="card h-100 shadow-sm">
                                  <div class="card-header">
                                      <h5 class="mb-0">
-                                        <span class="text-muted me-2">#{{ paginated_schools.first + loop.index0 }}.</span>
-                                        {{ school_name }}
-                                        <span class="badge bg-secondary float-end">{{ school_data.total_school_tickets }} Total Tickets</span>
+                                          <span class="text-muted me-2">#{{ paginated_schools.first + loop.index0 }}.</span>
+                                          {{ school_name }}
+                                          <span class="badge bg-secondary float-end">{{ school_data.total_school_tickets }} Total Tickets</span>
                                      </h5>
                                  </div>
                                  <ul class="list-group list-group-flush">
@@ -353,38 +355,39 @@
                          {% endfor %}
                     </div>
                     
-                    <!-- Idinagdag ang Pagination para sa Schools -->
+                    {# ========================================================= #}
+                    {# === SIMULA NG PAGBABAGO (NAGDAGDAG NG 'tab=school') === #}
+                    {# ========================================================= #}
                     {% if paginated_schools.pages > 1 %}
                     <nav aria-label="School Summary Pagination">
                         <ul class="pagination pagination-sm justify-content-center">
-                            <!-- Previous Page Link -->
                             <li class="page-item {% if not paginated_schools.has_prev %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.page, page_school=paginated_schools.prev_num, year=selected_year, quarter=selected_quarter, filter_view=filter_view) }}">Previous</a>
+                                <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.page, page_school=paginated_schools.prev_num, year=selected_year, quarter=selected_quarter, filter_view=filter_view, tab='school') }}">Previous</a>
                             </li>
-                            <!-- Page Numbers -->
                             {% for page_num in paginated_schools.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
                                 {% if page_num %}
                                     <li class="page-item {% if paginated_schools.page == page_num %}active{% endif %}">
-                                        <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.page, page_school=page_num, year=selected_year, quarter=selected_quarter, filter_view=filter_view) }}">{{ page_num }}</a>
+                                        <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.page, page_school=page_num, year=selected_year, quarter=selected_quarter, filter_view=filter_view, tab='school') }}">{{ page_num }}</a>
                                     </li>
                                 {% else %}
                                     <li class="page-item disabled"><span class="page-link">...</span></li>
                                 {% endif %}
                             {% endfor %}
-                            <!-- Next Page Link -->
                             <li class="page-item {% if not paginated_schools.has_next %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.page, page_school=paginated_schools.next_num, year=selected_year, quarter=selected_quarter, filter_view=filter_view) }}">Next</a>
+                                <a class="page-link" href="{{ url_for('admin.staff_dashboard', page_active=active_tickets.page, page_resolved=resolved_tickets.page, page_school=paginated_schools.next_num, year=selected_year, quarter=selected_quarter, filter_view=filter_view, tab='school') }}">Next</a>
                             </li>
                         </ul>
                     </nav>
                     {% endif %}
+                    {# ======================================================= #}
+                    {# === TAPOS NG PAGBABAGO (NAGDAGDAG NG 'tab=school') === #}
+                    {# ======================================================= #}
                     
                 {% else %}
                      <div class="alert alert-light" role="alert">
-                         No ticket summary data available for schools in the selected period.
+                          No ticket summary data available for schools in the selected period.
                      </div>
                 {% endif %}
-                <!-- === TAPOS NG PAG-AYOS === -->
                  
              {% endif %}
         </div>
@@ -397,82 +400,82 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Polling Logic (INAYOS ANG TIMESTAMP UPDATE) ---
-    const POLLING_INTERVAL = 30000; // Check every 30 seconds
-    let lastKnownTimestamp = new Date(0).toISOString(); // Initialize to earliest UTC
+     // --- Polling Logic (INAYOS ANG TIMESTAMP UPDATE) ---
+     const POLLING_INTERVAL = 20000; // Check every 20 seconds
+     let lastKnownTimestamp = new Date(0).toISOString(); // Initialize to earliest UTC
 
-    // Ipasa ang URL mula sa Jinja papunta sa JavaScript
-    const checkTicketsUrl = "{{ url_for('admin.check_new_tickets') }}";
+     // Ipasa ang URL mula sa Jinja papunta sa JavaScript
+     const checkTicketsUrl = "{{ url_for('admin.check_new_tickets') }}";
 
-    const ticketRows = document.querySelectorAll('#tickets-tab-pane tbody tr[data-timestamp]');
-    if (ticketRows.length > 0) {
-        const timestamps = Array.from(ticketRows).map(row => {
-            let ts = row.dataset.timestamp;
-             // Ensure 'Z' or offset is present for proper ISO parsing, assume UTC if missing
-             if (!ts.includes('+') && !ts.includes('Z')) {
-                 ts += 'Z'; 
-             }
-            return new Date(ts);
-        });
-        const validDates = timestamps.filter(date => !isNaN(date));
-        if(validDates.length > 0) {
-             const maxDate = new Date(Math.max.apply(null, validDates));
-             if (!isNaN(maxDate)) {
-                 lastKnownTimestamp = maxDate.toISOString();
-             }
-        }
-    }
-    // console.log("Initial lastKnownTimestamp:", lastKnownTimestamp); 
+     const ticketRows = document.querySelectorAll('#tickets-tab-pane tbody tr[data-timestamp]');
+     if (ticketRows.length > 0) {
+         const timestamps = Array.from(ticketRows).map(row => {
+             let ts = row.dataset.timestamp;
+              // Ensure 'Z' or offset is present for proper ISO parsing, assume UTC if missing
+               if (!ts.includes('+') && !ts.includes('Z')) {
+                   ts += 'Z'; 
+               }
+             return new Date(ts);
+         });
+         const validDates = timestamps.filter(date => !isNaN(date));
+         if(validDates.length > 0) {
+              const maxDate = new Date(Math.max.apply(null, validDates));
+              if (!isNaN(maxDate)) {
+                  lastKnownTimestamp = maxDate.toISOString();
+              }
+         }
+     }
+     // console.log("Initial lastKnownTimestamp:", lastKnownTimestamp); 
 
-    function checkForNewTickets() {
-        // --- BAGONG DAGDAG: Isama ang filter_view sa polling URL ---
-        const currentFilterView = "{{ filter_view }}"; // Kunin mula sa Jinja
-        
-        // Gamitin ang URL na ginawa natin sa taas
-        const url = `${checkTicketsUrl}?since=${encodeURIComponent(lastKnownTimestamp)}&filter_view=${currentFilterView}`;
-        
-        fetch(url)
-            .then(response => {
-                if (!response.ok) {
-                    console.error(`Check tickets HTTP error! Status: ${response.status}`);
-                    return null; 
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (!data) return; 
+     function checkForNewTickets() {
+         // --- BAGONG DAGDAG: Isama ang filter_view sa polling URL ---
+         const currentFilterView = "{{ filter_view }}"; // Kunin mula sa Jinja
+         
+         // Gamitin ang URL na ginawa natin sa taas
+         const url = `${checkTicketsUrl}?since=${encodeURIComponent(lastKnownTimestamp)}&filter_view=${currentFilterView}`;
+         
+         fetch(url)
+             .then(response => {
+                 if (!response.ok) {
+                     console.error(`Check tickets HTTP error! Status: ${response.status}`);
+                     return null; 
+                 }
+                 return response.json();
+             })
+             .then(data => {
+                 if (!data) return; 
 
-                // console.log("Poll response:", data, " | Current known:", lastKnownTimestamp); 
+                 // console.log("Poll response:", data, " | Current known:", lastKnownTimestamp); 
 
-                // --- ITO ANG INAYOS NA LOGIC ---
-                // 1. ALWAYS update lastKnownTimestamp IF the server sent back a newer one.
-                if (data.latest_timestamp && data.latest_timestamp > lastKnownTimestamp) {
-                    // console.log("Updating timestamp from", lastKnownTimestamp, "to", data.latest_timestamp); // Debug
-                    lastKnownTimestamp = data.latest_timestamp;
-                }
+                 // --- ITO ANG INAYOS NA LOGIC ---
+                 // 1. ALWAYS update lastKnownTimestamp IF the server sent back a newer one.
+                 if (data.latest_timestamp && data.latest_timestamp > lastKnownTimestamp) {
+                     // console.log("Updating timestamp from", lastKnownTimestamp, "to", data.latest_timestamp); // Debug
+                     lastKnownTimestamp = data.latest_timestamp;
+                 }
 
-                // 2. Show alert ONLY if the count of new tickets (since the *previous* known timestamp) is > 0.
-                if (data.new_count > 0) {
-                    const alertBox = document.getElementById('newTicketAlert');
-                    if (alertBox) {
-                         if (!alertBox.classList.contains('show')) {
-                             alertBox.classList.add('show');
-                         }
-                         alertBox.style.display = 'block'; 
-                    }
-                }
-                // --- TAPOS NG INAYOS NA LOGIC ---
+                 // 2. Show alert ONLY if the count of new tickets (since the *previous* known timestamp) is > 0.
+                 if (data.new_count > 0) {
+                     const alertBox = document.getElementById('newTicketAlert');
+                     if (alertBox) {
+                          if (!alertBox.classList.contains('show')) {
+                              alertBox.classList.add('show');
+                          }
+                          alertBox.style.display = 'block'; 
+                     }
+                 }
+                 // --- TAPOS NG INAYOS NA LOGIC ---
 
-            })
-            .catch(error => {
-                console.error('Error during fetch operation for new tickets:', error);
-            });
-    }
+             })
+             .catch(error => {
+                 console.error('Error during fetch operation for new tickets:', error);
+             });
+     }
 
-    // Start polling after an initial delay
-    setTimeout(() => {
-        setInterval(checkForNewTickets, POLLING_INTERVAL); 
-    }, POLLING_INTERVAL); // Start the interval after the first delay
+     // Start polling after an initial delay
+     setTimeout(() => {
+         setInterval(checkForNewTickets, POLLING_INTERVAL); 
+     }, POLLING_INTERVAL); // Start the interval after the first delay
 
 });
 </script>
