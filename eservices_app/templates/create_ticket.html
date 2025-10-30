@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block content %}
 <div class="container mt-4">
     <div class="card shadow-sm">
@@ -131,7 +131,7 @@
 
                 <!-- Action Buttons -->
                 <div class="mt-4 text-end">
-                    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">
+                    <a href="{{ url_for('main.home') }}" class="btn btn-outline-secondary">
                         ← Back
                     </a>
                     <button type="submit" class="btn btn-primary">
@@ -142,6 +142,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- Dynamic Section Handling -->
 <script>

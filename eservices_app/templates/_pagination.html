@@ -1,11 +1,15 @@
-{# Generic Pagination Macro - Expects a pagination object named 'pagination' #}
-{# Titingnan nito kung 'active_tickets' o 'resolved_tickets' ang ipinasa #}
-{% set pagination = active_tickets if active_tickets else resolved_tickets %}
-{# Titingnan kung anong page variable ang gagamitin sa URL (page_active or page_resolved) #}
-{% set page_var = 'page_active' if active_tickets else 'page_resolved' %}
-{# Kunin din ang page number ng *ibang* tab para hindi ito ma-reset kapag lumipat ng page #}
-{% set other_page_var = 'page_resolved' if active_tickets else 'page_active' %}
-{% set other_page_num = resolved_tickets.page if active_tickets else active_tickets.page %}
+{# _pagination.html #}
+{# Generic Pagination Macro - Expects a pagination object AND a tab_name #}
+{# Example usage: {% include '_pagination.html' with context pagination=paginated_schools tab_name='school-summary' %} #}
+
+{# Remove these lines as 'pagination' will be passed directly #}
+{# {% set pagination = active_tickets if active_tickets else resolved_tickets %} #}
+{# {% set page_var = 'page_active' if active_tickets else 'page_resolved' %} #}
+{# {% set other_page_var = 'page_resolved' if active_tickets else 'page_active' %} #}
+{# {% set other_page_num = resolved_tickets.page if active_tickets else active_tickets.page %} #}
+
+{# Determine page variable based on tab_name (adjust if needed) #}
+{% set page_var = 'page_' + tab_name.split('-')[0] %} {# e.g., page_school #}
 
 {% if pagination and pagination.pages > 1 %}
 <nav aria-label="Page navigation">
@@ -13,39 +17,42 @@
 
         {# Previous Page Link #}
         {% if pagination.has_prev %}
-            {# Gagawa ng URL na may tamang page numbers para sa parehong active at resolved #}
+            {# --- BINAGO KO ITO: Idagdag ang active_tab --- #}
             {% set url_params = {
                 page_var: pagination.prev_num,
-                other_page_var: other_page_num,
                 'search': search_query,
                 'year': selected_year,
-                'quarter': selected_quarter
+                'quarter': selected_quarter,
+                'filter_view': filter_view, 
+                'active_tab': tab_name  {# <-- Idinagdag ito #}
             } %}
+            {# --- HANGGANG DITO --- #}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for(request.endpoint, **url_params) }}">Previous</a>
+                {# Use request.endpoint if this is generic, or specify admin.staff_dashboard #}
+                <a class="page-link" href="{{ url_for('admin.staff_dashboard', **url_params) }}">Previous</a>
             </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Previous</span></li>
         {% endif %}
 
         {# Page Number Links #}
-        {# --- SIMULA NG PAGBABAGO: Pinalitan ang left/right_current sa 2 --- #}
         {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-        {# --- TAPOS NG PAGBABAGO --- #}
             {% if page_num %}
                 {% if pagination.page == page_num %}
                     <li class="page-item active" aria-current="page"><span class="page-link">{{ page_num }}</span></li>
                 {% else %}
-                    {# Gagawa ng URL na may tamang page numbers para sa parehong active at resolved #}
+                    {# --- BINAGO KO ITO: Idagdag ang active_tab --- #}
                     {% set url_params = {
                         page_var: page_num,
-                        other_page_var: other_page_num,
                         'search': search_query,
                         'year': selected_year,
-                        'quarter': selected_quarter
+                        'quarter': selected_quarter,
+                        'filter_view': filter_view,
+                        'active_tab': tab_name  {# <-- Idinagdag ito #}
                     } %}
+                    {# --- HANGGANG DITO --- #}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for(request.endpoint, **url_params) }}">{{ page_num }}</a>
+                        <a class="page-link" href="{{ url_for('admin.staff_dashboard', **url_params) }}">{{ page_num }}</a>
                     </li>
                 {% endif %}
             {% else %}
@@ -55,16 +62,18 @@
 
         {# Next Page Link #}
         {% if pagination.has_next %}
-             {# Gagawa ng URL na may tamang page numbers para sa parehong active at resolved #}
+             {# --- BINAGO KO ITO: Idagdag ang active_tab --- #}
             {% set url_params = {
                 page_var: pagination.next_num,
-                other_page_var: other_page_num,
                 'search': search_query,
                 'year': selected_year,
-                'quarter': selected_quarter
+                'quarter': selected_quarter,
+                'filter_view': filter_view,
+                'active_tab': tab_name  {# <-- Idinagdag ito #}
             } %}
+            {# --- HANGGANG DITO --- #}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for(request.endpoint, **url_params) }}">Next</a>
+                <a class="page-link" href="{{ url_for('admin.staff_dashboard', **url_params) }}">Next</a>
             </li>
         {% else %}
             <li class="page-item disabled"><span class="page-link">Next</span></li>

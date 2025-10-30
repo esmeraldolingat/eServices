@@ -1,7 +1,6 @@
 # app.py (nasa labas ng eservices_app)
 
 import os
-# Import create_app at db mula sa ating package
 from eservices_app import create_app, db
 # Import models *na kailangan lang* para sa CLI commands
 from eservices_app.models import User, Department, Service, School, CannedResponse, AuthorizedEmail
@@ -11,7 +10,6 @@ from eservices_app.models import User, Department, Service, School, CannedRespon
 app = create_app()
 
 # --- CLI COMMANDS ---
-# Ilalagay natin sila dito para madaling i-run sa terminal
 
 @app.cli.command("seed-db")
 def seed_db():

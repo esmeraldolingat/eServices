@@ -6,38 +6,56 @@ from flask_login import login_user, logout_user, current_user, login_required
 from .. import db, limiter # Import db at limiter
 from ..models import User # Import User model
 from ..forms import RegistrationForm, LoginForm, RequestResetForm, ResetPasswordForm # Import Auth forms
-# Import email sending function (assuming nasa parent pa rin)
-# Kung ililipat din natin sa 'utils' later, babaguhin ito
-# from ..utils import send_reset_email  # Example kung nasa utils.py
-from ..helpers import send_reset_email # Gagamitin natin ang pangalang 'helpers.py' mamaya para sa email functions
+# Import email sending function
+from ..helpers import send_reset_email 
 
 # Gumawa ng Blueprint instance
-# 'auth' ang pangalan ng blueprint
-# url_prefix='/auth' ay idadagdag natin mamaya sa registration para maging /auth/login, /auth/register etc.
 auth_bp = Blueprint('auth', __name__)
 
 # --- Login Route ---
 @auth_bp.route('/login', methods=['GET', 'POST'])
-# Ilipat ang limiter dito mula sa luma mong app.py
-@limiter.limit("40 per 2 hours; 10 per minute")
+# --- SIMULA NG PAG-AYOS ---
+# 1. Idinagdag ang 'methods=["POST"]' para ang pag-submit lang ang bilangin, hindi ang pag-refresh.
+# 2. Idinagdag ang 'exempt_when' para hindi ma-limit ang mga naka-login na user.
+# 3. Inayos ang redirect logic para sa Admin/Staff.
+@limiter.limit("10 per minute; 30 per 2 hours", 
+               methods=["POST"], 
+               exempt_when=lambda: current_user.is_authenticated,
+               error_message="Too many login attempts. Please wait 2 hours before trying again.")
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('main.home')) # Redirect sa main.home
+        # Kung naka-login na, 'exempt_when' ang gumagana
+        # at i-redirect sila sa tamang dashboard
+        if current_user.role in ['Admin', 'Staff']:
+            return redirect(url_for('admin.staff_dashboard'))
+        return redirect(url_for('main.home'))
+
     form = LoginForm()
+    
+    # Ang code dito ay tatakbo lang sa 'POST' request (kapag nag-submit)
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.username.data).first()
+        
         if user and user.check_password(form.password.data):
             login_user(user)
-            # Gamitin ang logger ng app
             current_app.logger.info(f"User {user.email} logged in successfully.")
             next_page = request.args.get('next')
-            # Mag-ingat sa open redirect vulnerability
-            # Siguraduhing internal URL lang ang next_page or default sa home
+            
+            # Inayos na redirect: papuntang staff dashboard kung staff/admin
+            if user.role in ['Admin', 'Staff']:
+                 return redirect(next_page or url_for('admin.staff_dashboard'))
+            
+            # Papuntang main home kung regular user
             return redirect(next_page or url_for('main.home'))
         else:
+            # Ito ay 'POST' request, kaya bibilangin ito ng limiter
             current_app.logger.warning(f"Failed login attempt for email: {form.username.data}")
             flash('Login Unsuccessful. Please check email and password', 'danger')
+            
+    # Ito ang 'GET' request (pag-load ng page), HINDI ito bibilangin ng limiter
     return render_template('login.html', form=form, title='Login')
+# --- TAPOS NG PAG-AYOS ---
+
 
 # --- Logout Route ---
 @auth_bp.route('/logout')
@@ -51,6 +69,8 @@ def logout():
 
 # --- Registration Route ---
 @auth_bp.route('/register', methods=['GET', 'POST'])
+# Opsyonal: Lagyan din ng limit ang registration para iwas bots
+@limiter.limit("10 per hour", methods=["POST"])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
@@ -68,28 +88,39 @@ def register():
 
 # --- Password Reset Request Route ---
 @auth_bp.route("/reset_password", methods=['GET', 'POST'])
-# Ilipat ang limiter dito mula sa luma mong app.py
-@limiter.limit("10 per day; 5 per hour")
+
+
+# --- PASSWORD RESET LIMIT ---
+# Idinagdag din ang methods=["POST"] at exempt_when dito
+@limiter.limit("5 per day; 2 per hour", 
+               methods=["POST"], 
+               exempt_when=lambda: current_user.is_authenticated,
+               error_message="Too many password reset requests. Please try again later.")
 def reset_request():
+# --- TAPOS NG PAG-AYOS ---
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
     form = RequestResetForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
-            # Gagamitin natin ang na-import na send_reset_email
             send_reset_email(user)
             current_app.logger.info(f"Password reset requested for user: {form.email.data}")
         else:
             current_app.logger.warning(f"Password reset requested for non-existent email: {form.email.data}")
-        # Laging ipakita itong message para hindi malaman kung existing ang email
         flash('An email has been sent with instructions to reset your password (if the email exists in our system).', 'info')
         return redirect(url_for('auth.login'))
     return render_template('request_reset.html', title='Reset Password', form=form)
 
 # --- Password Reset Token Handling Route ---
 @auth_bp.route("/reset_password/<token>", methods=['GET', 'POST'])
+# --- SIMULA NG PAG-AYOS ---
+# Nagdagdag ng limit sa POST para iwas brute-force sa token page
+@limiter.limit("10 per minute", 
+               methods=["POST"], 
+               exempt_when=lambda: current_user.is_authenticated)
 def reset_token(token):
+# --- TAPOS NG PAG-AYOS ---
     if current_user.is_authenticated:
         return redirect(url_for('main.home'))
     user = User.verify_reset_token(token)

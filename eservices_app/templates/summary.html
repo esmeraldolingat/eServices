@@ -27,10 +27,13 @@
     <div class="container">
         <div class="header-controls">
             <div>
-                <p style="margin: 0;"><a href="{{ url_for('home') }}">&larr; Back to Dashboard</a></p>
+                
+                <p style="margin: 0;"><a href="{{ url_for('main.home') }}">&larr; Back to Dashboard</a></p>
+                
                 <h1>Tickets Summary Report for {{ selected_year }}</h1>
             </div>
-            <form class="year-filter" method="GET" action="{{ url_for('summary') }}">
+            
+            <form class="year-filter" method="GET" action="{{ url_for('main.summary') }}">
                 <label for="year">Select Year:</label>
                 <select name="year" id="year">
                     {% for year in available_years %}

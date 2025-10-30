@@ -4,7 +4,7 @@
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, current_app, jsonify, Response) # Added Response for export
 from flask_login import login_required, current_user
-from sqlalchemy import func, case, extract, or_
+from sqlalchemy import func, case, extract, or_, text
 from sqlalchemy.orm import joinedload
 from datetime import datetime, timezone
 import io # For export
@@ -17,13 +17,11 @@ from ..models import (User, Department, Service, School, Ticket, Attachment,
                       CannedResponse, AuthorizedEmail, PersonalCannedResponse,
                       Response as TicketResponse) # Import all needed models
 from ..forms import (EditUserForm, AddAuthorizedEmailForm, BulkUploadForm,
-                     DepartmentForm, ServiceForm, CannedResponseForm,
-                     PersonalCannedResponseForm) # Import necessary forms
+                   DepartmentForm, ServiceForm, CannedResponseForm,
+                   PersonalCannedResponseForm) # Import necessary forms
 from ..decorators import admin_required, staff_or_admin_required # Import decorators
 
 # --- Create Blueprint ---
-# Define template_folder relative to the blueprint's location
-# Define static_folder if needed for blueprint-specific static files
 admin_bp = Blueprint('admin', __name__, template_folder='templates', url_prefix='/admin')
 
 # === STAFF/ADMIN DASHBOARD ===
@@ -40,6 +38,7 @@ def staff_dashboard():
     # --- Request Arguments ---
     page_active = request.args.get('page_active', 1, type=int)
     page_resolved = request.args.get('page_resolved', 1, type=int)
+    page_school = request.args.get('page_school', 1, type=int) # <-- IDINAGDAG ITO
     search_query = request.args.get('search', '').strip()
     default_view = 'all_managed' if current_user.role == 'Staff' else 'all_system'
     filter_view = request.args.get('filter_view', default_view)
@@ -71,7 +70,13 @@ def staff_dashboard():
             current_app.logger.warning(f"Staff user {current_user.email} has no services.")
             # Render empty dashboard gracefully
             empty_paginate = db.paginate(db.select(Ticket).where(db.false()), page=1, per_page=current_app.config['TICKETS_PER_PAGE'], error_out=False)
-            return render_template('staff_dashboard.html', active_tickets=empty_paginate, resolved_tickets=empty_paginate, dashboard_summary={}, school_summary={}, title="My Managed Tickets", available_years=available_years, selected_year=selected_year, selected_quarter=selected_quarter, search_query=search_query, filter_view=filter_view)
+            return render_template('staff_dashboard.html', 
+                                 active_tickets=empty_paginate, resolved_tickets=empty_paginate, 
+                                 dashboard_summary={}, school_summary={}, 
+                                 paginated_schools=empty_paginate, # <-- IDINAGDAG ITO
+                                 title="My Managed Tickets", available_years=available_years, 
+                                 selected_year=selected_year, selected_quarter=selected_quarter, 
+                                 search_query=search_query, filter_view=filter_view)
 
         ticket_base_query = ticket_base_query.filter(Ticket.service_id.in_(managed_service_ids))
         if filter_view == 'my_assigned':
@@ -107,6 +112,11 @@ def staff_dashboard():
     # --- Generate Summaries (Only if not searching) ---
     dashboard_summary = {}
     school_summary = {}
+    
+    # --- SIMULA NG PAGBABAGO SA SCHOOL SUMMARY ---
+    # Gawing 'empty_paginate' muna para sigurado
+    paginated_schools = db.paginate(db.select(School).where(db.false()), page=1, per_page=10, error_out=False)
+
     if not search_query:
         # === Department Summary ===
         dept_summary_query = db.session.query(
@@ -149,43 +159,97 @@ def staff_dashboard():
             if dept_services_data:
                 dashboard_summary[dept.name] = {'services': dept_services_data,'department_total': department_total_tickets,'service_count': len(dept_services_data)}
 
-        # === School Summary ===
-        school_summary_query = db.session.query(
-            School.name.label('school_name'),
-            Service.name.label('service_name'),
-            Service.id.label('service_id'),
-            func.count(Ticket.id).label('total'),
-            func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
-        ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(School, Ticket.school_id == School.id)
+        # === School Summary (Bagong Logic na may Pagination) ===
+        
+        # Step A: Kunin ang paginated list ng mga School objects na may tickets
+        # !!!!! ITO ANG INAYOS NA QUERY !!!!!
+        school_name_query = db.session.query(School, func.count(Ticket.id).label('total_tickets')) \
+            .select_from(Ticket).join(School, Ticket.school_id == School.id) \
+            .join(Service, Ticket.service_id == Service.id) # Kailangan i-join para sa filters
 
-        # Apply common filters
-        school_summary_query = school_summary_query.filter(extract('year', Ticket.date_posted) == selected_year)
+        # Ilagay ang common filters (Year, Quarter)
+        school_name_query = school_name_query.filter(extract('year', Ticket.date_posted) == selected_year)
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
-            school_summary_query = school_summary_query.filter(Ticket.date_posted.between(start_date, end_date))
+            school_name_query = school_name_query.filter(Ticket.date_posted.between(start_date, end_date))
+        
+        # Ilagay ang role filters (managed_service_ids, my_assigned)
         if managed_service_ids is not None:
-             school_summary_query = school_summary_query.filter(Service.id.in_(managed_service_ids))
+            school_name_query = school_name_query.filter(Service.id.in_(managed_service_ids))
         if filter_view == 'my_assigned':
-            school_summary_query = school_summary_query.filter(Ticket.assigned_staff_id == current_user.id)
-        school_summary_data_flat = school_summary_query.group_by(School.name, Service.name, Service.id).order_by(School.name, Service.name).all()
+            school_name_query = school_name_query.filter(Ticket.assigned_staff_id == current_user.id)
+            
+        # Group by school object at i-order base sa dami ng tickets (DESC)
+        school_name_query = school_name_query.group_by(School.id).order_by(db.text('total_tickets DESC'), School.name)
+        
+        # I-paginate ang query (10 schools bawat page)
+        paginated_schools = db.paginate(school_name_query, page=page_school, per_page=10, error_out=False)
+        
+        # Kunin ang listahan ng school names para sa page na ito *lamang*
+        # !!!!! ITO ANG INAYOS NA LIST COMPREHENSION !!!!!
+        # Ang 'item' ay isa na ngayong Row object (na may keys 'School' at 'total_tickets')
+        # Kaya ang tamang pag-access ay item.School.name
+        current_page_school_names = [item.name for item in paginated_schools.items]
 
-        # Process School Summary Data
-        for row in school_summary_data_flat:
-            s_name = row.school_name
-            if s_name not in school_summary: school_summary[s_name] = {'total_school_tickets': 0, 'services': []}
-            res, tot = row.resolved_count, row.total; act = tot - res
-            school_summary[s_name]['services'].append({'name': row.service_name, 'active': act, 'resolved': res, 'total': tot})
-            school_summary[s_name]['total_school_tickets'] += tot
+        # Step B: Kunin ang details para sa mga schools na nasa page na ito *lamang*
+        if current_page_school_names:
+            school_summary_details_query = db.session.query(
+                School.name.label('school_name'),
+                Service.name.label('service_name'),
+                Service.id.label('service_id'),
+                func.count(Ticket.id).label('total'),
+                func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
+            ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(School, Ticket.school_id == School.id)
+
+            # Ilagay ulit ang common filters
+            school_summary_details_query = school_summary_details_query.filter(extract('year', Ticket.date_posted) == selected_year)
+            if selected_quarter in quarters:
+                start_date, end_date = quarters[selected_quarter]
+                school_summary_details_query = school_summary_details_query.filter(Ticket.date_posted.between(start_date, end_date))
+            
+            # Ilagay ulit ang role filters
+            if managed_service_ids is not None:
+                school_summary_details_query = school_summary_details_query.filter(Service.id.in_(managed_service_ids))
+            if filter_view == 'my_assigned':
+                school_summary_details_query = school_summary_details_query.filter(Ticket.assigned_staff_id == current_user.id)
+            
+            # Filter para sa schools na nasa page na ito *lamang*
+            school_summary_details_query = school_summary_details_query.filter(School.name.in_(current_page_school_names))
+            
+            school_summary_data_flat = school_summary_details_query.group_by(School.name, Service.name, Service.id).order_by(School.name, Service.name).all()
+
+            # I-proseso ang data (pareho sa dati, pero mas mabilis na)
+            # !!!!! ITO ANG INAYOS NA BAHAGI !!!!!
+            # Gagamitin natin ang paginated_schools.items para makuha ang tamang total_tickets
+            for item in paginated_schools.items:
+                school_obj = item
+                total_count = school_summary.get(item.name, {}).get('total_school_tickets', 0)
+                school_summary[school_obj.name] = {'total_school_tickets': total_count, 'services': []}
+
+            for row in school_summary_data_flat:
+                s_name = row.school_name
+                if s_name in school_summary: # Check kung baka wala (kahit dapat meron)
+                    res, tot = row.resolved_count, row.total; act = tot - res
+                    school_summary[s_name]['services'].append({'name': row.service_name, 'active': act, 'resolved': res, 'total': tot})
+                    # HINDI NA KAILANGAN ITO: school_summary[s_name]['total_school_tickets'] += tot (dahil nakuha na natin sa Step A)
+    
+    else: # Kung may search_query, i-define lang si paginated_schools as empty
+         paginated_schools = db.paginate(db.select(School).where(db.false()), page=1, per_page=10, error_out=False)
+    
+    # --- TAPOS NG PAGBABAGO ---
+
 
     # --- Render Template ---
     return render_template('staff_dashboard.html', # Assuming this is in eservices_app/templates/
                            active_tickets=active_tickets, resolved_tickets=resolved_tickets,
                            dashboard_summary=dashboard_summary, school_summary=school_summary,
+                           paginated_schools=paginated_schools, # <-- IPINASA ITO
                            title=title, available_years=available_years,
                            selected_year=selected_year, selected_quarter=selected_quarter,
                            search_query=search_query, filter_view=filter_view)
 
 # === TICKET EXPORT (ADMIN) ===
+# ... (walang pagbabago mula dito pababa) ...
 
 @admin_bp.route('/export-tickets')
 @login_required
@@ -243,7 +307,6 @@ def export_tickets():
     response.headers["Content-Disposition"] = f"attachment;filename=tickets_export_{timestamp}.csv"
     current_app.logger.info(f"Admin {current_user.email} exported tickets based on current filters.")
     return response
-
 
 # === TICKET DELETION (ADMIN) ===
 
@@ -304,11 +367,11 @@ def edit_user(user_id):
         if user.email != form.email.data:
              existing_user = User.query.filter(User.email == form.email.data, User.id != user_id).first()
              if existing_user:
-                 flash('That email address is already registered.', 'danger')
-                 # Reload necessary data for template
-                 departments = Department.query.options(joinedload(Department.services)).order_by(Department.name).all()
-                 managed_service_ids = {service.id for service in user.managed_services}
-                 return render_template('admin/edit_user.html', form=form, user=user, departments=departments, managed_service_ids=managed_service_ids, title='Edit User')
+                  flash('That email address is already registered.', 'danger')
+                  # Reload necessary data for template
+                  departments = Department.query.options(joinedload(Department.services)).order_by(Department.name).all()
+                  managed_service_ids = {service.id for service in user.managed_services}
+                  return render_template('admin/edit_user.html', form=form, user=user, departments=departments, managed_service_ids=managed_service_ids, title='Edit User')
         user.email = form.email.data
         user.role = form.role.data
 
@@ -322,11 +385,6 @@ def edit_user(user_id):
         current_app.logger.info(f"Admin {current_user.email} updated user profile for {user.email}")
         flash(f'User {user.name} updated successfully!', 'success')
         return redirect(url_for('admin.manage_users')) # Correct redirect endpoint
-
-    # Pre-fill form on GET request (already handled by obj=user, but explicit doesn't hurt)
-    # form.name.data = user.name
-    # form.email.data = user.email
-    # form.role.data = user.role
 
     # Load data needed for the template (services for checkboxes)
     departments = Department.query.options(joinedload(Department.services)).order_by(Department.name).all()
@@ -595,8 +653,8 @@ def edit_service(service_id):
                     flash(f'Service "{service.name}" updated.', 'success')
                     return redirect(url_for('admin.manage_services'))
             else: # No changes made
-                 flash('No changes detected for the service.', 'info')
-                 return redirect(url_for('admin.manage_services'))
+               flash('No changes detected for the service.', 'info')
+               return redirect(url_for('admin.manage_services'))
 
     # Pre-fill department on GET if not POST validation error
     if request.method == 'GET':
@@ -681,6 +739,8 @@ def add_canned_response():
     # Use admin/add_edit_canned_response.html
     return render_template('admin/add_edit_canned_response.html', form=form, title='Add Canned Response')
 
+
+
 @admin_bp.route('/canned-response/<int:response_id>/edit', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -707,44 +767,68 @@ def edit_canned_response(response_id):
 
         if form.validate_on_submit():
              if form.department_id.data == 0:
-                 flash('Please select a valid department.', 'danger')
+                    flash('Please select a valid department.', 'danger')
              else:
                 service_id_val = form.service_id.data if form.service_id.data != 0 else None
-                # Check for duplicates only if relevant fields changed
-                if (response_obj.title != form.title.data or
+
+                # --- SIMULA NG PAG-AYOS (Bug fix para sa Canned Response) ---
+
+                # 1. Alamin muna kung may nagbago BA TALAGA (kasama ang body)
+                has_changed = (
+                    response_obj.title != form.title.data or
+                    response_obj.body != form.body.data or 
                     response_obj.department_id != form.department_id.data or
-                    response_obj.service_id != service_id_val):
-                     existing = CannedResponse.query.filter(
-                         CannedResponse.title == form.title.data,
-                         CannedResponse.department_id == form.department_id.data,
-                         CannedResponse.service_id == service_id_val,
-                         CannedResponse.id != response_id
-                     ).first()
-                     if existing:
-                        flash(f'Another canned response with this title already exists for this department/service.', 'warning')
-                     else: # No conflict or no change, proceed
-                        response_obj.title = form.title.data
-                        response_obj.body = form.body.data
-                        response_obj.department_id = form.department_id.data
-                        response_obj.service_id = service_id_val
-                        db.session.commit()
-                        current_app.logger.info(f"Admin {current_user.email} updated canned response ID {response_id}")
-                        flash(f'Canned response "{form.title.data}" updated.', 'success')
-                        return redirect(url_for('admin.manage_canned_responses'))
-                else:
+                    response_obj.service_id != service_id_val
+                )
+
+                if not has_changed:
                     flash('No changes detected for the canned response.', 'info')
                     return redirect(url_for('admin.manage_canned_responses'))
+
+                # 2. Ngayong alam nating may nagbago, i-check kung may duplicate sa mga UNIQUE fields
+                has_unique_fields_changed = (
+                    response_obj.title != form.title.data or
+                    response_obj.department_id != form.department_id.data or
+                    response_obj.service_id != service_id_val
+                )
+
+                if has_unique_fields_changed:
+                    existing = CannedResponse.query.filter(
+                        CannedResponse.title == form.title.data,
+                        CannedResponse.department_id == form.department_id.data,
+                        CannedResponse.service_id == service_id_val,
+                        CannedResponse.id != response_id
+                    ).first()
+                    if existing:
+                        flash(f'Another canned response with this title already exists for this department/service.', 'warning')
+                        # Kailangan i-render ulit ang template para makita ang error
+                        return render_template('admin/add_edit_canned_response.html', form=form, title='Edit Canned Response', response_id=response_id)
+                
+                # 3. Kung walang duplicate (o kung body lang ang nagbago), i-save na lahat.
+                response_obj.title = form.title.data
+                response_obj.body = form.body.data
+                response_obj.department_id = form.department_id.data
+                response_obj.service_id = service_id_val
+                
+                db.session.commit()  # <-- Ito na ang magse-save ng pagbabago sa body
+                
+                current_app.logger.info(f"Admin {current_user.email} updated canned response ID {response_id}")
+                flash(f'Canned response "{form.title.data}" updated.', 'success')
+                return redirect(url_for('admin.manage_canned_responses'))
+                
+                # --- TAPOS NG PAG-AYOS ---
 
     # Pre-fill service_id on GET request
     if request.method == 'GET':
         form.service_id.data = response_obj.service_id if response_obj.service_id else 0
 
     # Use admin/add_edit_canned_response.html
-    return render_template('admin/add_edit_canned_response.html', form=form, title='Edit Canned Response', response_id=response_id) # Pass response_id if needed
+    return render_template('admin/add_edit_canned_response.html', form=form, title='Edit Canned Response', response_id=response_id)
+
+
 
 @admin_bp.route('/_get_services_for_department/<int:dept_id>')
 @login_required
-# No need for admin_required maybe? Check if used elsewhere. Let's keep it for safety.
 @admin_required
 def _get_services_for_department(dept_id):
     """Helper route to dynamically load services for a department."""
@@ -886,13 +970,6 @@ def check_new_tickets():
         if not managed_service_ids:
             return jsonify({'new_count': 0, 'latest_timestamp': since_iso})
         base_query = base_query.filter(Ticket.service_id.in_(managed_service_ids))
-
-    # --- Consider Assigned Filter for Polling? ---
-    # filter_view = request.args.get('filter_view') # Get the filter from JS
-    # if filter_view == 'my_assigned':
-    #     base_query = base_query.filter(Ticket.assigned_staff_id == current_user.id)
-    # --- NOTE: Decide if polling should respect the current view filter ---
-    # For now, let's keep it simple: notify if ANY new ticket in managed services arrives.
 
     new_count = base_query.count()
     latest_ticket = base_query.order_by(Ticket.date_posted.desc()).first()

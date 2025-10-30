@@ -4,11 +4,13 @@
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2">Dashboard</h1>
         <div class="btn-toolbar mb-2 mb-md-0">
-            <a href="{{ url_for('select_department') }}" class="btn btn-sm btn-outline-primary">
+            
+            <a href="{{ url_for('tickets.select_department') }}" class="btn btn-sm btn-outline-primary">
                 Create New Ticket
             </a>
-            {# <a href="{{ url_for('summary') }}" class="btn btn-sm btn-outline-secondary ms-2">View Summary Report</a> #}
-        </div>
+            
+            {# 
+            </div>
     </div>
 
     <h2>All Tickets</h2>
@@ -29,7 +31,7 @@
                     {% for ticket in tickets %}
                     <tr>
                         <td>
-                            <a href="{{ url_for('ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a>
+                            <a href="{{ url_for('tickets.ticket_detail', ticket_id=ticket.id) }}">{{ ticket.ticket_number }}</a>
                         </td>
                         <td>{{ ticket.requester_name }}</td>
                         <td>{{ ticket.ticket_department.name }}</td>

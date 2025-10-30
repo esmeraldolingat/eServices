@@ -73,9 +73,13 @@
                         
                         <div class="d-flex justify-content-end mt-4">
                             {% if current_user.is_authenticated and (current_user.role in ['Admin', 'Staff']) %}
-                                <a href="{{ url_for('staff_dashboard') }}" class="btn btn-outline-secondary btn-lg me-2"><i class="bi bi-arrow-left"></i> Back</a>
+                                
+                                <a href="{{ url_for('admin.staff_dashboard') }}" class="btn btn-outline-secondary btn-lg me-2"><i class="bi bi-arrow-left"></i> Back</a>
+                            
                             {% else %}
-                                <a href="{{ url_for('my_tickets') }}" class="btn btn-outline-secondary btn-lg me-2"><i class="bi bi-arrow-left"></i> Back</a>
+                                
+                                <a href="{{ url_for('tickets.my_tickets') }}" class="btn btn-outline-secondary btn-lg me-2"><i class="bi bi-arrow-left"></i> Back</a>
+                            
                             {% endif %}
                             {{ form.submit(class="btn btn-primary btn-lg") }}
                         </div>
