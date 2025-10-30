@@ -28,8 +28,7 @@ admin_bp = Blueprint('admin', __name__, template_folder='templates', url_prefix=
 
 
 
-
-# === STAFF/ADMIN DASHBOARD ===
+# Sa loob ng: eservices_app/admin/routes.py
 
 @admin_bp.route('/staff-dashboard')
 @login_required
@@ -49,12 +48,7 @@ def staff_dashboard():
     filter_view = request.args.get('filter_view', default_view)
     selected_year = request.args.get('year', datetime.utcnow().year, type=int)
     selected_quarter = request.args.get('quarter', 0, type=int)
-
-    # === ITO ANG BAGONG LOGIC PARA SA ACTIVE TAB ===
-    # Babasahin natin ang 'tab' parameter galing sa URL.
-    # Kung walang 'tab' parameter, default ay 'tickets'.
     active_tab = request.args.get('tab', 'tickets')
-    # === TAPOS NG LOGIC ===
 
     # --- Year/Quarter Setup ---
     available_years_query = db.session.query(extract('year', Ticket.date_posted)).distinct().order_by(extract('year', Ticket.date_posted).desc())
@@ -79,8 +73,10 @@ def staff_dashboard():
         if not managed_service_ids:
             flash("You are not assigned to any services. Contact admin.", "warning")
             current_app.logger.warning(f"Staff user {current_user.email} has no services.")
-            # Render empty dashboard gracefully
             empty_paginate = db.paginate(db.select(Ticket).where(db.false()), page=1, per_page=current_app.config['TICKETS_PER_PAGE'], error_out=False)
+            
+            # --- BAGONG DAGDAG na timestamp para iwas error ---
+            initial_latest_timestamp = datetime.min.replace(tzinfo=timezone.utc).isoformat()
             
             return render_template('staff_dashboard.html', 
                                    active_tickets=empty_paginate, resolved_tickets=empty_paginate, 
@@ -89,7 +85,8 @@ def staff_dashboard():
                                    title="My Managed Tickets", available_years=available_years, 
                                    selected_year=selected_year, selected_quarter=selected_quarter, 
                                    search_query=search_query, filter_view=filter_view,
-                                   active_tab=active_tab) # <-- Idinagdag na rin dito
+                                   active_tab=active_tab,
+                                   initial_latest_timestamp=initial_latest_timestamp) # <-- Idinagdag dito
 
         ticket_base_query = ticket_base_query.filter(Ticket.service_id.in_(managed_service_ids))
         if filter_view == 'my_assigned':
@@ -125,8 +122,6 @@ def staff_dashboard():
     # --- Generate Summaries (Only if not searching) ---
     dashboard_summary = {}
     school_summary = {}
-    
-    # Gawing 'empty_paginate' muna para sigurado
     paginated_schools = db.paginate(db.select(School).where(db.false()), page=1, per_page=10, error_out=False)
 
     if not search_query:
@@ -169,26 +164,20 @@ def staff_dashboard():
                 dashboard_summary[dept.name] = {'services': dept_services_data,'department_total': department_total_tickets,'service_count': len(dept_services_data)}
 
         # === School Summary ===
-        # (Ito 'yung code na gumagana galing sa dati nating ayos)
-        
+        # (Walang binago dito)
         school_name_query = db.session.query(School). \
             select_from(Ticket).join(School, Ticket.school_id == School.id). \
             join(Service, Ticket.service_id == Service.id)
-
         school_name_query = school_name_query.filter(extract('year', Ticket.date_posted) == selected_year)
         if selected_quarter in quarters:
             start_date, end_date = quarters[selected_quarter]
             school_name_query = school_name_query.filter(Ticket.date_posted.between(start_date, end_date))
-        
         if managed_service_ids is not None:
             school_name_query = school_name_query.filter(Service.id.in_(managed_service_ids))
         if filter_view == 'my_assigned':
             school_name_query = school_name_query.filter(Ticket.assigned_staff_id == current_user.id)
-            
         school_name_query = school_name_query.group_by(School.id).order_by(func.count(Ticket.id).desc(), School.name)
-        
         paginated_schools = db.paginate(school_name_query, page=page_school, per_page=10, error_out=False)
-        
         current_page_school_names = [item.name for item in paginated_schools.items]
 
         if current_page_school_names:
@@ -199,24 +188,18 @@ def staff_dashboard():
                 func.count(Ticket.id).label('total'),
                 func.sum(case((Ticket.status == 'Resolved', 1), else_=0)).label('resolved_count')
             ).select_from(Ticket).join(Service, Ticket.service_id == Service.id).join(School, Ticket.school_id == School.id)
-
             school_summary_details_query = school_summary_details_query.filter(extract('year', Ticket.date_posted) == selected_year)
             if selected_quarter in quarters:
                 start_date, end_date = quarters[selected_quarter]
                 school_summary_details_query = school_summary_details_query.filter(Ticket.date_posted.between(start_date, end_date))
-            
             if managed_service_ids is not None:
                 school_summary_details_query = school_summary_details_query.filter(Service.id.in_(managed_service_ids))
             if filter_view == 'my_assigned':
                 school_summary_details_query = school_summary_details_query.filter(Ticket.assigned_staff_id == current_user.id)
-            
             school_summary_details_query = school_summary_details_query.filter(School.name.in_(current_page_school_names))
-            
             school_summary_data_flat = school_summary_details_query.group_by(School.name, Service.name, Service.id).order_by(School.name, Service.name).all()
-
             for school_obj in paginated_schools.items:
                 school_summary[school_obj.name] = {'total_school_tickets': 0, 'services': []}
-
             for row in school_summary_data_flat:
                 s_name = row.school_name
                 if s_name in school_summary: 
@@ -224,10 +207,33 @@ def staff_dashboard():
                     school_summary[s_name]['services'].append({'name': row.service_name, 'active': act, 'resolved': res, 'total': tot})
                     school_summary[s_name]['total_school_tickets'] += tot
         
-    else: # Kung may search_query, i-define lang si paginated_schools as empty
+    else: 
          paginated_schools = db.paginate(db.select(School).where(db.false()), page=1, per_page=10, error_out=False)
-    
  
+
+    # ====================================================================
+    # === SIMULA NG BAGONG AYOS (Pagkuha ng tamang latest timestamp) ===
+    # ====================================================================
+    
+    # Hanapin ang pinakabagong timestamp para sa polling
+    # Gagamitin natin ang 'ticket_base_query' bago ito i-paginate
+    # Ito ay sumusunod sa LAHAT ng filters (year, quarter, search, role)
+    latest_ticket_in_view = ticket_base_query.order_by(Ticket.date_posted.desc()).first()
+    
+    if latest_ticket_in_view:
+        # Ito ang pinakabagong ticket na nakikita ng user base sa filters
+        # Kailangan nating tiyakin na ito ay UTC at may "Z" (Zulu time)
+        latest_timestamp_utc = latest_ticket_in_view.date_posted.replace(tzinfo=timezone.utc)
+        initial_latest_timestamp = latest_timestamp_utc.isoformat().replace('+00:00', 'Z')
+    else:
+        # Kung walang ticket, magsimula sa pinaka-unang petsa
+        initial_latest_timestamp = datetime.min.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
+
+    # ==================================================================
+    # === TAPOS NG BAGONG AYOS ===
+    # ==================================================================
+
+
     # === ITO NA ANG IISANG FINAL RETURN ===
     return render_template(
         'staff_dashboard.html', 
@@ -242,9 +248,9 @@ def staff_dashboard():
         selected_quarter=selected_quarter,
         search_query=search_query,
         filter_view=filter_view,
-        active_tab=active_tab  # <--- HETO NA SIYA
+        active_tab=active_tab,
+        initial_latest_timestamp=initial_latest_timestamp  # <--- HETO NA ANG TAMANG TIMESTAMP
     )
-
 
 
 

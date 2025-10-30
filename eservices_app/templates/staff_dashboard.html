@@ -4,7 +4,7 @@
 <div class="container my-4">
     <h2 class="mb-4">{{ title }}</h2> {# Ito 'yung dynamic title mula sa app.py #}
 
-    <div id="newTicketAlert" class="alert alert-info alert-dismissible fade show" role="alert" style="display: none;">
+    <div id="newTicketAlert" class="alert alert-info alert-dismissible fade" role="alert" style="display: none;">
         <i class="bi bi-info-circle-fill me-2"></i> New tickets have arrived!
         
         <a href="{{ url_for('admin.staff_dashboard', year=selected_year, quarter=selected_quarter, search=search_query, filter_view=filter_view) }}" class="alert-link">Refresh the page</a> to see them.
@@ -12,7 +12,7 @@
     </div>
 
     <form method="GET" action="{{ url_for('admin.staff_dashboard') }}" class="row g-3 mb-4 align-items-end bg-light p-3 rounded border">
-    <div class="col-md-3">
+        <div class="col-md-3">
             <label for="search" class="form-label">Search (Ticket #, Name, School)</label>
             <input type="text" class="form-control" id="search" name="search" value="{{ search_query or '' }}" placeholder="Enter keyword...">
         </div>
@@ -38,13 +38,13 @@
             <button type="submit" class="btn btn-primary me-2"><i class="bi bi-filter"></i> Filter / Search</button>
             
             <a href="{{ url_for('admin.staff_dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-clockwise"></i> Reset</a>
-            </div>
-         {% if current_user.role == 'Admin' %}
-         <div class="col-md-2 d-flex justify-content-end align-items-end">
+        </div>
+        {% if current_user.role == 'Admin' %}
+        <div class="col-md-2 d-flex justify-content-end align-items-end">
             
             <a href="{{ url_for('admin.export_tickets', search=search_query, year=selected_year, quarter=selected_quarter) }}" class="btn btn-success"><i class="bi bi-download me-1"></i> Export CSV</a>
-             </div>
-         {% endif %}
+        </div>
+        {% endif %}
     </form>
 
     <div class="mb-3">
@@ -56,7 +56,7 @@
                        href="{{ url_for('admin.staff_dashboard', filter_view='all_system', search=search_query, year=selected_year, quarter=selected_quarter) }}">
                         <i class="bi bi-globe me-1"></i> All System Tickets
                     </a>
-                   </li>
+                </li>
             {% else %}
                 <li class="nav-item">
                     
@@ -64,7 +64,7 @@
                        href="{{ url_for('admin.staff_dashboard', filter_view='all_managed', search=search_query, year=selected_year, quarter=selected_quarter) }}">
                         <i class="bi bi-grid-fill me-1"></i> My Managed Services
                     </a>
-                   </li>
+                </li>
             {% endif %}
             
             <li class="nav-item">
@@ -77,7 +77,6 @@
         </ul>
     </div>
 
-    {# Ito 'yung galing sa routes.py na (active_tab) #}
     <ul class="nav nav-tabs mb-3" id="dashboardTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'tickets' %}active{% endif %}" id="tickets-tab" data-bs-toggle="tab" data-bs-target="#tickets-tab-pane" type="button" role="tab" aria-controls="tickets-tab-pane" aria-selected="{% if active_tab == 'tickets' %}true{% else %}false{% endif %}">
@@ -143,16 +142,13 @@
                                 <td>
                                     
                                     <a href="{{ url_for('tickets.ticket_detail', ticket_id=ticket.id) }}" class="btn btn-sm btn-outline-primary">View</a>
-                                    </td>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
                 
-                {# ========================================================== #}
-                {# === SIMULA NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
-                {# ========================================================== #}
                 {% if active_tickets.pages > 1 %}
                  <nav aria-label="Active Tickets Pagination">
                     <ul class="pagination pagination-sm justify-content-center">
@@ -174,10 +170,7 @@
                     </ul>
                  </nav>
                  {% endif %}
-                {# ======================================================== #}
-                {# === TAPOS NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
-                {# ======================================================== #}
-                 
+                
             {% else %}
                 <div class="alert alert-light" role="alert">
                     No active tickets found matching your criteria.
@@ -221,16 +214,13 @@
                                 <td>
                                     
                                     <a href="{{ url_for('tickets.ticket_detail', ticket_id=ticket.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
-                                    </td>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
                 
-                {# ========================================================== #}
-                {# === SIMULA NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
-                {# ========================================================== #}
                 {% if resolved_tickets.pages > 1 %}
                  <nav aria-label="Resolved Tickets Pagination">
                     <ul class="pagination pagination-sm justify-content-center">
@@ -252,10 +242,7 @@
                     </ul>
                  </nav>
                  {% endif %}
-                {# ======================================================== #}
-                {# === TAPOS NG PAGBABAGO (NAGDAGDAG NG 'tab=tickets') === #}
-                {# ======================================================== #}
-                 
+                
             {% else %}
                  <div class="alert alert-light" role="alert">
                       No resolved tickets found matching your criteria.
@@ -352,12 +339,9 @@
                                  </ul>
                              </div>
                          </div>
-                         {% endfor %}
+                        {% endfor %}
                     </div>
                     
-                    {# ========================================================= #}
-                    {# === SIMULA NG PAGBABAGO (NAGDAGDAG NG 'tab=school') === #}
-                    {# ========================================================= #}
                     {% if paginated_schools.pages > 1 %}
                     <nav aria-label="School Summary Pagination">
                         <ul class="pagination pagination-sm justify-content-center">
@@ -379,16 +363,13 @@
                         </ul>
                     </nav>
                     {% endif %}
-                    {# ======================================================= #}
-                    {# === TAPOS NG PAGBABAGO (NAGDAGDAG NG 'tab=school') === #}
-                    {# ======================================================= #}
                     
                 {% else %}
                      <div class="alert alert-light" role="alert">
                           No ticket summary data available for schools in the selected period.
                      </div>
                 {% endif %}
-                 
+                
              {% endif %}
         </div>
         
@@ -400,82 +381,69 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-     // --- Polling Logic (INAYOS ANG TIMESTAMP UPDATE) ---
-     const POLLING_INTERVAL = 20000; // Check every 20 seconds
-     let lastKnownTimestamp = new Date(0).toISOString(); // Initialize to earliest UTC
+    // --- Polling Logic ---
+    const POLLING_INTERVAL = 20000; // Check every 20 seconds
+    const checkTicketsUrl = "{{ url_for('admin.check_new_tickets') }}";
 
-     // Ipasa ang URL mula sa Jinja papunta sa JavaScript
-     const checkTicketsUrl = "{{ url_for('admin.check_new_tickets') }}";
+    // 1. (BAGONG AYOS) Kunin ang TAMANG initial timestamp mula sa Python/Jinja2
+    // Ito na ang pinakabagong timestamp, kahit anong page pa ang tinitingnan mo.
+    // Gagamitin natin ang '| safe' para manatili ang "Z" o "+00:00"
+    let lastKnownTimestamp = '{{ initial_latest_timestamp | safe }}';
 
-     const ticketRows = document.querySelectorAll('#tickets-tab-pane tbody tr[data-timestamp]');
-     if (ticketRows.length > 0) {
-         const timestamps = Array.from(ticketRows).map(row => {
-             let ts = row.dataset.timestamp;
-              // Ensure 'Z' or offset is present for proper ISO parsing, assume UTC if missing
-               if (!ts.includes('+') && !ts.includes('Z')) {
-                   ts += 'Z'; 
-               }
-             return new Date(ts);
-         });
-         const validDates = timestamps.filter(date => !isNaN(date));
-         if(validDates.length > 0) {
-              const maxDate = new Date(Math.max.apply(null, validDates));
-              if (!isNaN(maxDate)) {
-                  lastKnownTimestamp = maxDate.toISOString();
-              }
-         }
-     }
-     // console.log("Initial lastKnownTimestamp:", lastKnownTimestamp); 
+    // console.log("Initial lastKnownTimestamp from server:", lastKnownTimestamp); // Para sa debugging
 
-     function checkForNewTickets() {
-         // --- BAGONG DAGDAG: Isama ang filter_view sa polling URL ---
-         const currentFilterView = "{{ filter_view }}"; // Kunin mula sa Jinja
-         
-         // Gamitin ang URL na ginawa natin sa taas
-         const url = `${checkTicketsUrl}?since=${encodeURIComponent(lastKnownTimestamp)}&filter_view=${currentFilterView}`;
-         
-         fetch(url)
-             .then(response => {
-                 if (!response.ok) {
-                     console.error(`Check tickets HTTP error! Status: ${response.status}`);
-                     return null; 
-                 }
-                 return response.json();
-             })
-             .then(data => {
-                 if (!data) return; 
+    // 2. Ito 'yung function na tumatawag sa server
+    function checkForNewTickets() {
+        // Kunin ang current view (e.g., 'all_system' o 'all_managed') mula sa Jinja
+        const currentFilterView = "{{ filter_view }}"; 
+        
+        // Buuin ang URL na may 'since' at 'filter_view'
+        const url = `${checkTicketsUrl}?since=${encodeURIComponent(lastKnownTimestamp)}&filter_view=${currentFilterView}`;
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    console.error(`Check tickets HTTP error! Status: ${response.status}`);
+                    return null; 
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return; 
 
-                 // console.log("Poll response:", data, " | Current known:", lastKnownTimestamp); 
+                // console.log("Poll response:", data); // Para sa debugging
 
-                 // --- ITO ANG INAYOS NA LOGIC ---
-                 // 1. ALWAYS update lastKnownTimestamp IF the server sent back a newer one.
-                 if (data.latest_timestamp && data.latest_timestamp > lastKnownTimestamp) {
-                     // console.log("Updating timestamp from", lastKnownTimestamp, "to", data.latest_timestamp); // Debug
-                     lastKnownTimestamp = data.latest_timestamp;
-                 }
+                // 3. I-UPDATE ANG TIMESTAMP
+                // I-update lang kung may binalik na *mas bago* ang server.
+                if (data.latest_timestamp && data.latest_timestamp > lastKnownTimestamp) {
+                    // console.log("Updating timestamp to", data.latest_timestamp); // Para sa debugging
+                    lastKnownTimestamp = data.latest_timestamp;
+                }
 
-                 // 2. Show alert ONLY if the count of new tickets (since the *previous* known timestamp) is > 0.
-                 if (data.new_count > 0) {
-                     const alertBox = document.getElementById('newTicketAlert');
-                     if (alertBox) {
-                          if (!alertBox.classList.contains('show')) {
-                              alertBox.classList.add('show');
-                          }
-                          alertBox.style.display = 'block'; 
-                     }
-                 }
-                 // --- TAPOS NG INAYOS NA LOGIC ---
+                // 4. IPAKITA ANG ALERT
+                // Ipakita lang ang alert kung ang bilang ng BAGONG tickets (new_count)
+                // ay mas malaki sa zero.
+                if (data.new_count > 0) {
+                    const alertBox = document.getElementById('newTicketAlert');
+                    if (alertBox) {
+                         // Ipakita ang alert
+                         if (!alertBox.classList.contains('show')) {
+                             alertBox.classList.add('show');
+                         }
+                         alertBox.style.display = 'block'; 
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error during fetch operation for new tickets:', error);
+            });
+    }
 
-             })
-             .catch(error => {
-                 console.error('Error during fetch operation for new tickets:', error);
-             });
-     }
-
-     // Start polling after an initial delay
-     setTimeout(() => {
-         setInterval(checkForNewTickets, POLLING_INTERVAL); 
-     }, POLLING_INTERVAL); // Start the interval after the first delay
+    // 5. Simulan ang pag-poll
+    // Patakbuhin ang interval (paulit-ulit) pagkatapos ng unang delay
+    setTimeout(() => {
+        setInterval(checkForNewTickets, POLLING_INTERVAL); 
+    }, POLLING_INTERVAL); 
 
 });
 </script>
